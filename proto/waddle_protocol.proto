@@ -1,0 +1,89 @@
+syntax = "proto3";
+
+package waddlemap;
+
+option go_package = "waddlemap/proto";
+
+service WaddleService {
+  rpc Execute (WaddleRequest) returns (WaddleResponse);
+}
+
+message WaddleRequest {
+  string request_id = 1;
+  oneof operation {
+    CheckKeyRequest check_key = 2;          // 1. check_key(key)
+    GetValueByIndexRequest get_val = 3;     // 2. get_value_by_index(key, index)
+    GetLengthRequest get_len = 4;           // 3. get_length(key)
+    GetLastValueRequest get_last = 5;       // 4. get_last_value(key)
+    AddValueRequest add_val = 6;            // 5. add_value(key, value)
+    SearchGlobalRequest search_global = 8;  // 6. search_global(search_param)
+    SearchOnKeyRequest search_key = 9;      // 7. search_on_key(key, value)
+    SnapshotRequest snapshot = 10;          // 8. snapshot()
+    UpdateValueRequest update_val = 7;      // 9. update_value(key, index, value)
+    GetKeysRequest get_keys = 11;           // 10. get_keys()
+    GetValueListRequest get_val_list = 12;  // 11. get_value_list(key)
+  }
+}
+
+message WaddleResponse {
+  string request_id = 1;
+  bool success = 2;
+  string error_message = 3;
+  oneof result {
+    DataItem item = 4;
+    uint64 length = 5;
+    SearchResult search_results = 6;
+    KeyList key_list = 7;
+    ValueList value_list = 8;
+  }
+}
+
+message DataItem {
+  uint64 id = 1;
+  int64 timestamp = 2;
+  bytes payload = 3;
+}
+
+// --- Operation Messages ---
+
+message CheckKeyRequest { string key = 1; }
+
+message GetValueByIndexRequest { 
+  string key = 1; 
+  uint64 index = 2; 
+}
+
+message GetLengthRequest { string key = 1; }
+message GetLastValueRequest { string key = 1; }
+
+message AddValueRequest {
+  string key = 1;
+  DataItem item = 2;
+}
+
+message UpdateValueRequest {
+  string key = 1;
+  uint64 index = 2;
+  DataItem item = 3;
+}
+
+message SearchGlobalRequest {
+  bytes pattern = 1; 
+}
+
+message SearchOnKeyRequest {
+  string key = 1;
+  bytes pattern = 2;
+}
+
+message SnapshotRequest { string snapshot_name = 1; }
+
+message SearchResult {
+  repeated DataItem items = 1;
+}
+
+message GetKeysRequest {}
+message KeyList { repeated string keys = 1; }
+
+message GetValueListRequest { string key = 1; }
+message ValueList { repeated DataItem items = 1; }
