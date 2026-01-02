@@ -3,6 +3,7 @@ module waddlemap
 go 1.24.4
 
 require (
+	github.com/klauspost/compress v1.18.2
 	github.com/zeebo/blake3 v0.2.4
 	google.golang.org/protobuf v1.36.11
 )

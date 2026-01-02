@@ -183,3 +183,4 @@ cython_debug/
 *.exe~
 /waddlemap_db
 *.bin
+/clients/python/waddlemap_db

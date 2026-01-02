@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,9 +20,10 @@ import (
 const PartitionCount = 16
 
 type Manager struct {
-	Config  *types.DBSchemaConfig
-	Buckets map[uint32]*Bucket
-	mu      sync.RWMutex
+	Config      *types.DBSchemaConfig
+	Buckets     map[uint32]*Bucket
+	mu          sync.RWMutex
+	Compression bool
 }
 
 type Bucket struct {
@@ -33,10 +35,16 @@ type Bucket struct {
 	IndexLock sync.RWMutex
 }
 
+// NewManager creates a new storage Manager instance with the provided database schema configuration.
+// It initializes the data directory and creates/opens PartitionCount bucket files for data storage.
+// Each bucket maintains its own file and in-memory index for key-value lookups.
+// If a bucket's index file is corrupted or missing, it will be automatically rebuilt from the data file.
+// Returns an error if directory creation fails, file operations fail, or bucket initialization fails.
 func NewManager(cfg *types.DBSchemaConfig) (*Manager, error) {
 	mgr := &Manager{
-		Config:  cfg,
-		Buckets: make(map[uint32]*Bucket),
+		Config:      cfg,
+		Buckets:     make(map[uint32]*Bucket),
+		Compression: true,
 	}
 
 	if err := os.MkdirAll(cfg.DataPath, 0755); err != nil {
@@ -93,6 +101,9 @@ func (m *Manager) Close() error {
 	return nil
 }
 
+// getBucketID computes a bucket ID for the given key using the BLAKE3 hash function.
+// It hashes the key, extracts the first 4 bytes of the hash as a uint32 value in big-endian order,
+// and returns the value modulo PartitionCount to ensure the bucket ID is within valid range.
 func (m *Manager) getBucketID(key string) uint32 {
 	h := blake3.New()
 	h.Write([]byte(key))
@@ -103,23 +114,56 @@ func (m *Manager) getBucketID(key string) uint32 {
 
 // ---------------- Operations ----------------
 
+// Append adds a new entry to the storage for the given key and payload.
+// The entry is appended to the end of the corresponding bucket file in the format:
+// [KeyLen(4)][KeyBytes][PayloadLen(4)][PayloadBytes].
+// It updates the in-memory index with the offset of the new entry.
+// If SyncMode is set to "strict", the file is synced to disk after writing.
+// Returns an error if any file or index operation fails.
 func (m *Manager) Append(key string, payload []byte) error {
+	// Security: Limit key and payload size to prevent abuse
+	const maxKeyLen = 1024
+	// const maxPayloadLen = 10 * 1024 * 1024 // 10MB
+
+	if len(key) == 0 || len(key) > maxKeyLen {
+		return fmt.Errorf("invalid key length")
+	}
+	// if len(payload) > maxPayloadLen {
+	// 	return fmt.Errorf("payload too large")
+	// }
+
 	bucket := m.Buckets[m.getBucketID(key)]
 
 	bucket.WriteLock.Lock()
 	defer bucket.WriteLock.Unlock()
 
-	offset, err := bucket.File.Seek(0, 2) // End
+	offset, err := bucket.File.Seek(0, 2) // End // Append the data to the end of the file
 	if err != nil {
 		return err
 	}
 
-	// Format: [KeyLen(4)][KeyBytes][PayloadLen(4)][PayloadBytes]
+	// Format: [KeyLen(4 bytes - int32)][KeyBytes][PayloadLen(4 bytes - int32)][PayloadBytes]
+
 	buf := new(bytes.Buffer)
-	binary.Write(buf, binary.BigEndian, int32(len(key)))
-	buf.Write([]byte(key))
-	binary.Write(buf, binary.BigEndian, int32(len(payload)))
-	buf.Write(payload)
+	if err := binary.Write(buf, binary.BigEndian, int32(len(key))); err != nil {
+		return err
+	}
+	if _, err := buf.Write([]byte(key)); err != nil {
+		return err
+	}
+
+	compressedPayload := CompressBytes(payload)
+
+	if len(compressedPayload) >= math.MaxInt32 {
+		return fmt.Errorf("Payload size greater than MaxInt32 bytes after compression")
+	}
+	// Using int32 since we assume the data to be of smaller sizer. It can hold approx 2.14 GB
+	if err := binary.Write(buf, binary.BigEndian, uint32(len(compressedPayload))); err != nil {
+		return err
+	}
+	if _, err := buf.Write(compressedPayload); err != nil {
+		return err
+	}
 
 	if _, err := bucket.File.Write(buf.Bytes()); err != nil {
 		return err
@@ -317,6 +361,12 @@ func (b *Bucket) readRecordAt(offset int64) ([]byte, error) {
 	if _, err := b.File.ReadAt(payload, payloadLenOffset+4); err != nil {
 		return nil, err
 	}
+
+	payload, err := DecompressBytes(payload)
+	if err != nil {
+		return nil, err
+	}
+
 	return payload, nil
 }
 
