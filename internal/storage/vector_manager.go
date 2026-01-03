@@ -96,6 +96,16 @@ func (vm *VectorManager) CreateCollection(name string, dimensions uint32, metric
 
 // DeleteCollection deletes a vector collection.
 func (vm *VectorManager) DeleteCollection(name string) error {
+	// Purge keys from underlying storage
+	if coll, err := vm.collections.GetCollection(name); err == nil {
+		// Use ListKeys to get all keys in the collection
+		keys := coll.ListKeys()
+		for _, key := range keys {
+			storageKey := vm.makeStorageKey(name, key)
+			_ = vm.Manager.DeleteKey(storageKey)
+		}
+	}
+
 	return vm.collections.DeleteCollection(name)
 }
 
@@ -107,6 +117,10 @@ func (vm *VectorManager) ListCollections() []types.CollectionConfig {
 // GetCollection returns a collection by name.
 func (vm *VectorManager) GetCollection(name string) (*Collection, error) {
 	return vm.collections.GetCollection(name)
+}
+
+func (vm *VectorManager) makeStorageKey(collection, key string) string {
+	return fmt.Sprintf("%s:%s", collection, key)
 }
 
 // AppendBlock appends a block to a key.
@@ -147,7 +161,8 @@ func (vm *VectorManager) AppendBlock(collection, key string, block *types.BlockD
 		return 0, fmt.Errorf("failed to encode entry: %w", err)
 	}
 
-	if err := vm.Manager.Append(key, encoded); err != nil {
+	storageKey := vm.makeStorageKey(collection, key)
+	if err := vm.Manager.Append(storageKey, encoded); err != nil {
 		return index, fmt.Errorf("storage append failed: %w", err)
 	}
 
@@ -215,7 +230,8 @@ func (vm *VectorManager) BatchAppendBlocks(collection string, keys []string, blo
 			continue
 		}
 
-		batchEntries[key] = encoded
+		storageKey := vm.makeStorageKey(collection, key)
+		batchEntries[storageKey] = encoded
 		successes[i] = true
 	}
 
@@ -242,7 +258,8 @@ func (vm *VectorManager) GetBlock(collection, key string, index uint32) (*types.
 		return nil, fmt.Errorf("key %q not found", key)
 	}
 
-	payload, err := vm.Manager.Get(key, int(index))
+	storageKey := vm.makeStorageKey(collection, key)
+	payload, err := vm.Manager.Get(storageKey, int(index))
 	if err != nil {
 		return nil, err
 	}
