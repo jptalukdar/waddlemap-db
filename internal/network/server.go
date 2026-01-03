@@ -4,8 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log"
 	"net"
+	"waddlemap/internal/logger"
 	"waddlemap/internal/transaction"
 	"waddlemap/internal/types"
 	pb "waddlemap/proto"
@@ -31,12 +31,12 @@ func (s *Server) Start() error {
 		return err
 	}
 	defer listener.Close()
-	log.Printf("WaddleMap Server listening on port %d\n", s.Port)
+	// logger.Info("WaddleMap Server listening on port %d", s.Port)
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Printf("Accept error: %v\n", err)
+			// logger.Error("Accept error: %v", err)
 			continue
 		}
 
@@ -58,7 +58,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		lenBuf := make([]byte, 4)
 		if _, err := io.ReadFull(conn, lenBuf); err != nil {
 			if err != io.EOF {
-				log.Printf("Read header error: %v\n", err)
+				// logger.Error("Read header error: %v", err)
 			}
 			return
 		}
@@ -67,14 +67,14 @@ func (s *Server) handleConnection(conn net.Conn) {
 		// 2. Read Message Body
 		buf := make([]byte, msgLen)
 		if _, err := io.ReadFull(conn, buf); err != nil {
-			log.Printf("Read body error: %v\n", err)
+			// logger.Error("Read body error: %v", err)
 			return
 		}
 
 		// Decode Protobuf
 		var reqPb pb.WaddleRequest
 		if err := proto.Unmarshal(buf, &reqPb); err != nil {
-			log.Printf("Unmarshal error: %v\n", err)
+			// logger.Error("Unmarshal error: %v", err)
 			continue
 		}
 
@@ -148,7 +148,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 			ctx.Operation = types.OpBatchAppendBlock
 			ctx.Params = op.BatchAppend
 		default:
-			log.Printf("Unknown operation: %T\n", reqPb.Operation)
+			logger.Info("Unknown operation: %T", reqPb.Operation)
 			continue
 		}
 
@@ -165,7 +165,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		}
 
 		if respCtx.Error != nil {
-			log.Printf("Op Error (ReqID: %s): %v\n", respCtx.ReqID, respCtx.Error)
+			logger.Error("Op Error (ReqID: %s): %v", respCtx.ReqID, respCtx.Error)
 			respPb.ErrorMessage = respCtx.Error.Error()
 		}
 
@@ -189,7 +189,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 		data, err := proto.Marshal(respPb)
 		if err != nil {
-			log.Printf("Marshal error: %v\n", err)
+			logger.Error("Marshal error: %v", err)
 			return
 		}
 

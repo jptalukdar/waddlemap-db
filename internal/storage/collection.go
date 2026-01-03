@@ -408,6 +408,8 @@ func (c *Collection) DeleteKey(key string) error {
 	}
 
 	for _, id := range vectorIDs {
+		// Debug logging
+		// fmt.Printf("Deleting VectorID %d for Key %s\n", id, key)
 		c.HNSWIndex.Delete(id)
 		// How to remove from KeywordIndex? Need to know keywords?
 		// InvertedIndex supports Delete(keywords, id).

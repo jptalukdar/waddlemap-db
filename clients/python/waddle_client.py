@@ -92,7 +92,8 @@ class Collection:
         req.contains_key.collection = self.name
         req.contains_key.key = key
         resp = self.client._send_request(req)
-        return resp.success
+        # Server returns existence in length field (1=Found, 0=Not Found)
+        return resp.length > 0
 
     def search(self, vector, top_k=10, keywords=None, mode="global"):
         """

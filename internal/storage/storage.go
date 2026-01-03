@@ -6,12 +6,12 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"waddlemap/internal/logger"
 	"waddlemap/internal/types"
 
 	"github.com/zeebo/blake3"
@@ -72,7 +72,7 @@ func NewManager(cfg *types.DBSchemaConfig) (*Manager, error) {
 
 		// Load Index
 		if err := b.loadIndex(); err != nil {
-			log.Printf("Bucket %d: Rebuilding index... (Reason: %v)\n", bucketID, err)
+			logger.Info("Bucket %d: Rebuilding index... (Reason: %v)", bucketID, err)
 			b.rebuildIndex()
 			b.saveIndex()
 		}
@@ -214,64 +214,87 @@ func (m *Manager) BatchAppend(entries map[string][]byte) error {
 			defer wg.Done()
 			bucket := m.Buckets[bucketID]
 
-			bucket.WriteLock.Lock()
-			defer bucket.WriteLock.Unlock()
+			// 3. Prepare data in parallel (CPU bound, no lock needed)
+			type preparedItem struct {
+				Key    string
+				Buffer []byte
+			}
+			prepared := make([]preparedItem, len(items))
+			var wgPrep sync.WaitGroup
 
-			// Seek once to end
+			// Limit concurrency? For now, 1 goroutine per item is fine in Go.
+			// But if items is huge, maybe semaphore.
+			// Assuming sensible batch size from caller.
+			for i, item := range items {
+				wgPrep.Add(1)
+				go func(idx int, it struct {
+					Key     string
+					Payload []byte
+				}) {
+					defer wgPrep.Done()
+					buf := new(bytes.Buffer)
+					// Format logic match Append()
+					if err := binary.Write(buf, binary.BigEndian, int32(len(it.Key))); err != nil {
+						return // handle error?
+					}
+					buf.Write([]byte(it.Key))
+
+					compressedPayload := CompressBytes(it.Payload)
+					if err := binary.Write(buf, binary.BigEndian, uint32(len(compressedPayload))); err != nil {
+						return
+					}
+					buf.Write(compressedPayload)
+
+					prepared[idx] = preparedItem{
+						Key:    it.Key,
+						Buffer: buf.Bytes(),
+					}
+				}(i, item)
+			}
+			wgPrep.Wait()
+
+			// 4. Write sequentially (I/O bound, critical section)
+			bucket.WriteLock.Lock()
+
 			offset, err := bucket.File.Seek(0, 2)
 			if err != nil {
+				bucket.WriteLock.Unlock()
 				mu.Lock()
 				errs = append(errs, fmt.Sprintf("bucket %d seek: %v", bucketID, err))
 				mu.Unlock()
 				return
 			}
 
-			// Prepare Index updates
 			newIndexEntries := make(map[string]int64)
 
-			// Buffer writes? Or write individually?
-			// Writing individually to file is okay if OS buffers, but we can buffer in memory.
-			// Let's write individually for simplicity but under one lock.
-
-			for _, item := range items {
-				// START Format logic from Append()
-				buf := new(bytes.Buffer)
-				if err := binary.Write(buf, binary.BigEndian, int32(len(item.Key))); err != nil {
-					// handle error
-					continue
+			for _, p := range prepared {
+				if len(p.Buffer) == 0 {
+					continue // Failed preparation
 				}
-				buf.Write([]byte(item.Key))
 
-				compressedPayload := CompressBytes(item.Payload)
-				if err := binary.Write(buf, binary.BigEndian, uint32(len(compressedPayload))); err != nil {
-					continue
-				}
-				buf.Write(compressedPayload)
-
-				n, err := bucket.File.Write(buf.Bytes())
+				n, err := bucket.File.Write(p.Buffer)
 				if err != nil {
 					mu.Lock()
-					errs = append(errs, fmt.Sprintf("bucket %d write key %s: %v", bucketID, item.Key, err))
+					errs = append(errs, fmt.Sprintf("bucket %d write key %s: %v", bucketID, p.Key, err))
 					mu.Unlock()
-					return // Stop usage of this bucket on error
+					break // Stop writing to this bucket
 				}
-				// END Format
 
-				newIndexEntries[item.Key] = offset
+				newIndexEntries[p.Key] = offset
 				offset += int64(n)
 			}
 
 			if m.Config.SyncMode == "strict" {
 				bucket.File.Sync()
 			}
+			bucket.WriteLock.Unlock()
 
-			// Update Index in batch
+			// Update Index
 			bucket.IndexLock.Lock()
 			for k, off := range newIndexEntries {
 				bucket.Index[k] = append(bucket.Index[k], off)
 			}
 			bucket.IndexLock.Unlock()
-
 		}(bid, items)
 	}
 	wg.Wait()
@@ -437,39 +460,70 @@ func (m *Manager) Snapshot(name string) error {
 // ---------------- Helpers ----------------
 
 func (b *Bucket) readRecordAt(offset int64) ([]byte, error) {
-	// 1. Read Generic Header
-	// We need KeyLen (4)
-	header := make([]byte, 4)
-	if _, err := b.File.ReadAt(header, offset); err != nil {
+	// Optimistically read a chunk (e.g. 4KB) to avoid multiple syscalls for small records.
+	const bufSize = 4096
+	buf := make([]byte, bufSize)
+
+	// ReadAt might return EOF if file is smaller than 4KB or we are at end.
+	n, err := b.File.ReadAt(buf, offset)
+	if err != nil && err != io.EOF {
 		return nil, err
 	}
-	keyLen := binary.BigEndian.Uint32(header)
-
-	// 2. Read Rest
-	// Offset + 4 + KeyLen -> PayloadLen
-	// This is inefficient (multiple syscalls). Optimized: Read a larger chunk.
-
-	// Let's read Header + Key + PayloadLen
-	// But we don't know PayloadLen yet. So let's just seek past key.
-
-	payloadLenOffset := offset + 4 + int64(keyLen)
-	lenBuf := make([]byte, 4)
-	if _, err := b.File.ReadAt(lenBuf, payloadLenOffset); err != nil {
-		return nil, err
-	}
-	payloadLen := binary.BigEndian.Uint32(lenBuf)
-
-	payload := make([]byte, payloadLen)
-	if _, err := b.File.ReadAt(payload, payloadLenOffset+4); err != nil {
-		return nil, err
+	if n < 4 {
+		return nil, fmt.Errorf("record too short (header)")
 	}
 
-	payload, err := DecompressBytes(payload)
-	if err != nil {
-		return nil, err
+	// 1. Parse KeyLen
+	keyLen := binary.BigEndian.Uint32(buf[0:4])
+
+	// 2. Check if we have Key + PayloadLen header
+	// Header structure: [KeyLen(4)][Key(keyLen)][PayloadLen(4)][Payload...]
+	headerEnd := 4 + int(keyLen) + 4
+
+	if n < headerEnd {
+		// Buffer didn't capture the full header (e.g. huge key).
+		// Fallback: Read specifically the length we need for the rest of header.
+		remainingHeader := make([]byte, headerEnd-n)
+		if _, err := b.File.ReadAt(remainingHeader, offset+int64(n)); err != nil {
+			return nil, err
+		}
+		// Stitch header to parse payloadLen
+		fullHeader := append(buf[:n], remainingHeader...)
+		payloadLen := binary.BigEndian.Uint32(fullHeader[4+keyLen:])
+
+		// Now read payload
+		payload := make([]byte, payloadLen)
+		payloadOffset := offset + int64(headerEnd)
+		if _, err := b.File.ReadAt(payload, payloadOffset); err != nil {
+			return nil, err
+		}
+		return DecompressBytes(payload)
 	}
 
-	return payload, nil
+	// We have the header in buf
+	payloadLen := binary.BigEndian.Uint32(buf[4+keyLen : headerEnd])
+	totalSize := headerEnd + int(payloadLen)
+
+	var payload []byte
+	if n >= totalSize {
+		// We have the full record in buffer
+		payload = buf[headerEnd:totalSize]
+	} else {
+		// We need to read the rest of the payload
+		// We have (n - headerEnd) bytes of payload in buf
+		// We need (payloadLen - (n - headerEnd)) more
+		payload = make([]byte, payloadLen)
+		copy(payload, buf[headerEnd:n])
+
+		bytesReadSoFar := n - headerEnd
+		remainingPayload := payload[bytesReadSoFar:]
+
+		if _, err := b.File.ReadAt(remainingPayload, offset+int64(n)); err != nil {
+			return nil, err
+		}
+	}
+
+	return DecompressBytes(payload)
 }
 
 func (b *Bucket) scan(pattern []byte) [][]byte {
@@ -563,7 +617,7 @@ func (b *Bucket) rebuildIndex() {
 		key := string(keyBuf)
 
 		if count < 10 && b.ID == 0 {
-			log.Printf("Bucket %d: Record %d at %d - KeyLen: %d, Key: %s\n", b.ID, count, offset, keyLen, key)
+			// logger.Info("Bucket %d: Record %d at %d - KeyLen: %d, Key: %s", b.ID, count, offset, keyLen, key)
 		}
 
 		// Read Payload Len
@@ -582,11 +636,11 @@ func (b *Bucket) rebuildIndex() {
 		count++
 
 		if strings.Contains(key, "cycle") {
-			log.Printf("Bucket %d: Found cycle key at offset %d\n", b.ID, offset)
+			// logger.Info("Bucket %d: Found cycle key at offset %d", b.ID, offset)
 		}
 
 		// Next Offset
 		offset, _ = b.File.Seek(0, 1)
 	}
-	log.Printf("Bucket %d: Rebuilt index with %d keys and %d records\n", b.ID, len(b.Index), count)
+	logger.Info("Bucket %d: Rebuilt index with %d keys and %d records", b.ID, len(b.Index), count)
 }

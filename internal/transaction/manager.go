@@ -2,7 +2,7 @@ package transaction
 
 import (
 	"fmt"
-	"log"
+	"waddlemap/internal/logger"
 	"waddlemap/internal/storage"
 	"waddlemap/internal/types"
 	pb "waddlemap/proto"
@@ -25,8 +25,15 @@ func (tm *Manager) Start() {
 }
 
 func (tm *Manager) dispatch() {
+	// Limit concurrent request handling to 100 (or config based)
+	// This prevents spawning unlimited goroutines under heavy load.
+	sem := make(chan struct{}, 100)
 	for req := range tm.Requests {
-		go tm.handle(req)
+		sem <- struct{}{} // Block if limit reached
+		go func(r types.RequestContext) {
+			defer func() { <-sem }() // Release token
+			tm.handle(r)
+		}(req)
 	}
 }
 
@@ -37,7 +44,7 @@ func (tm *Manager) handle(req types.RequestContext) {
 	// Recover from panics to prevent crashing the server
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("Transaction Manager: PANIC in request %s: %v", req.ReqID, r)
+			logger.Error("Transaction Manager: PANIC in request %s: %v", req.ReqID, r)
 			resp.Success = false
 			resp.Error = fmt.Errorf("internal error: %v", r)
 			select {
@@ -47,15 +54,15 @@ func (tm *Manager) handle(req types.RequestContext) {
 		}
 	}()
 
-	log.Printf("Transaction Manager: Handling request %s (op: %d)\n", req.ReqID, req.Operation)
+	// logger.Info("Transaction Manager: Handling request %s (op: %d)", req.ReqID, req.Operation)
 	switch req.Operation {
 	// Collection Ops
 	case types.OpCreateCollection:
 		if params, ok := req.Params.(*pb.CreateCollectionRequest); ok {
 			metric := types.MetricL2
-			if params.Metric == "cos" {
+			if params.Metric == "cos" || params.Metric == "cosine" {
 				metric = types.MetricCosine
-			} else if params.Metric == "ip" {
+			} else if params.Metric == "ip" || params.Metric == "inner_product" {
 				metric = types.MetricIP
 			}
 			err := tm.Storage.CreateCollection(params.Name, params.Dimensions, metric)
@@ -247,13 +254,13 @@ func (tm *Manager) handle(req types.RequestContext) {
 				resp.Error = err
 			} else {
 				resp.Success = true
-				// Bool success implies exists? No.
-				// Protocol check_key returned success=exists.
-				// But boolean result is not in WaddleResponse result oneof.
-				// Assuming success=true/false maps to found?
-				// Or add BoolResult? For now, success=true if found?
-				// Let's assume Success=Exists for ContainsKey.
-				resp.Success = exists
+				// Use Length field to return boolean result (1=true, 0=false)
+				// because Success=false triggers client exception.
+				if exists {
+					resp.Data = uint64(1)
+				} else {
+					resp.Data = uint64(0)
+				}
 			}
 		}
 

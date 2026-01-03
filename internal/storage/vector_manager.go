@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"waddlemap/internal/types"
 )
@@ -169,15 +170,21 @@ func (vm *VectorManager) BatchAppendBlocks(collection string, keys []string, blo
 	batchEntries := make(map[string][]byte)
 
 	// Phase 1: In-Memory updates & preparation
+	var walEntries []WALEntry
+
 	for i, key := range keys {
 		block := blocks[i]
 
-		// WAL (Individual for now, TODO: BatchWAL)
-		if err := vm.wal.LogAdd(collection, key, 0, block.Vector, block.Keywords, []byte(block.Primary)); err != nil {
-			// Log error but continue? Or fail all?
-			// If WAL fails, we shouldn't proceed for this item.
-			continue
-		}
+		// Prepare WAL entry
+		walEntries = append(walEntries, WALEntry{
+			Timestamp:  time.Now().UnixNano(),
+			OpType:     WALOpAdd,
+			Collection: collection,
+			Key:        key,
+			Vector:     block.Vector,
+			Keywords:   block.Keywords,
+			Data:       []byte(block.Primary),
+		})
 
 		index, err := coll.AppendBlock(key, block)
 		if err != nil {
@@ -208,6 +215,15 @@ func (vm *VectorManager) BatchAppendBlocks(collection string, keys []string, blo
 
 		batchEntries[key] = encoded
 		successes[i] = true
+	}
+
+	// Write WAL Batch
+	if len(walEntries) > 0 {
+		// Fix timestamps
+		// Need "time" package. storage package usually has it.
+		if err := vm.wal.LogBatch(walEntries); err != nil {
+			return successes, fmt.Errorf("WAL batch logging failed: %w", err)
+		}
 	}
 
 	// Phase 2: Batch Storage Write

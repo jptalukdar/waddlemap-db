@@ -81,6 +81,22 @@ func (w *WAL) LogDelete(collection, key string, vectorID uint64) error {
 	})
 }
 
+// LogBatch logs multiple entries in a single batch with one fsync.
+func (w *WAL) LogBatch(entries []WALEntry) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	for _, entry := range entries {
+		w.seqNum++
+		if err := w.encoder.Encode(entry); err != nil {
+			return fmt.Errorf("failed to encode WAL entry: %w", err)
+		}
+	}
+
+	// Sync to ensure durability
+	return w.file.Sync()
+}
+
 // log writes an entry to the WAL.
 func (w *WAL) log(entry WALEntry) error {
 	w.mu.Lock()

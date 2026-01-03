@@ -1,11 +1,13 @@
 package main
 
 import (
+	"flag"
 	"io"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"waddlemap/internal/logger"
 	"waddlemap/internal/network"
 	"waddlemap/internal/storage"
 	"waddlemap/internal/transaction"
@@ -13,6 +15,11 @@ import (
 )
 
 func main() {
+	// Flags
+	port := flag.Int("port", 6969, "Port to listen on")
+	quiet := flag.Bool("quiet", false, "Disable info logging (log only errors)")
+	flag.Parse()
+
 	// 0. Logging Setup
 	logFile, err := os.OpenFile("server.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
@@ -20,12 +27,19 @@ func main() {
 	}
 	defer logFile.Close()
 
+	// 0. Logging Setup
 	multiWriter := io.MultiWriter(os.Stdout, logFile)
-	log.SetOutput(multiWriter)
-	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+	logger.Setup(multiWriter)
 
-	log.Println("----------------------------------------")
-	log.Println("WaddleMap Server Initializing...")
+	if *quiet {
+		logger.SetLevel(logger.LevelError)
+	} else {
+		// Default Info
+		logger.SetLevel(logger.LevelInfo)
+	}
+
+	logger.Info("----------------------------------------")
+	logger.Info("WaddleMap Server Initializing...")
 
 	// 1. Config
 	cfg := &types.DBSchemaConfig{
@@ -37,7 +51,7 @@ func main() {
 	// 2. Storage
 	storageMgr, err := storage.NewVectorManager(cfg)
 	if err != nil {
-		log.Fatalf("Failed to init storage: %v", err)
+		logger.Fatal("Failed to init storage: %v", err)
 	}
 	defer storageMgr.Close()
 
@@ -46,7 +60,7 @@ func main() {
 	txMgr.Start()
 
 	// 4. Server
-	server := network.NewServer(6969, txMgr)
+	server := network.NewServer(*port, txMgr)
 
 	// Graceful Shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -54,11 +68,11 @@ func main() {
 
 	go func() {
 		if err := server.Start(); err != nil {
-			log.Fatalf("Server error: %v", err)
+			logger.Fatal("Server error: %v", err)
 		}
 	}()
 
-	log.Println("Server started. Press Ctrl+C to stop.")
+	logger.Info("Server started on port %d. Press Ctrl+C to stop.", *port)
 	<-sigChan
-	log.Println("Shutting down...")
+	logger.Info("Shutting down...")
 }
