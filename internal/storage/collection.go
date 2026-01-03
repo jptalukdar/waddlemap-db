@@ -319,6 +319,65 @@ func (c *Collection) AppendBlock(key string, block *types.BlockData) (uint32, er
 	return index, nil
 }
 
+// BatchAppendBlocks adds multiple blocks efficiently under a single lock.
+// Returns a slice of (vectorID, index) for each successfully added block.
+func (c *Collection) BatchAppendBlocks(keys []string, blocks []*types.BlockData) ([]struct {
+	VectorID uint64
+	Index    uint32
+}, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	results := make([]struct {
+		VectorID uint64
+		Index    uint32
+	}, len(keys))
+
+	// Prepare HNSW batch items
+	hnswItems := make([]struct {
+		ID     uint64
+		Vector []float32
+	}, 0, len(keys))
+
+	for i, key := range keys {
+		block := blocks[i]
+		index := c.KeyLengths[key]
+		vectorID := c.DocMap.GetNextVectorID()
+
+		results[i].VectorID = vectorID
+		results[i].Index = index
+
+		// Prepare HNSW item
+		if len(block.Vector) > 0 {
+			hnswItems = append(hnswItems, struct {
+				ID     uint64
+				Vector []float32
+			}{vectorID, block.Vector})
+		}
+
+		// Add to forward index
+		c.DocMap.Add(vectorID, key, index)
+
+		// Add to keyword index
+		if len(block.Keywords) > 0 {
+			c.KeywordIndex.Add(block.Keywords, vectorID)
+		}
+
+		// Update memory indexes
+		c.KeyLengths[key]++
+		c.KeyIndex[key] = append(c.KeyIndex[key], vectorID)
+	}
+
+	// Batch insert into HNSW (single lock acquisition inside)
+	if len(hnswItems) > 0 {
+		if err := c.HNSWIndex.BatchAdd(hnswItems); err != nil {
+			return results, fmt.Errorf("HNSW batch add failed: %w", err)
+		}
+	}
+
+	return results, nil
+}
+
 // Search performs vector similarity search.
 func (c *Collection) Search(queryVector []float32, topK uint32, filter *types.SearchFilter) ([]types.SearchResultItem, error) {
 	c.mu.RLock()

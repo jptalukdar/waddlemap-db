@@ -159,7 +159,7 @@ func (vm *VectorManager) AppendBlock(collection, key string, block *types.BlockD
 	return index, nil
 }
 
-// BatchAppendBlocks appends multiple blocks effectively.
+// BatchAppendBlocks appends multiple blocks efficiently using batch methods.
 func (vm *VectorManager) BatchAppendBlocks(collection string, keys []string, blocks []*types.BlockData) ([]bool, error) {
 	coll, err := vm.collections.GetCollection(collection)
 	if err != nil {
@@ -167,16 +167,12 @@ func (vm *VectorManager) BatchAppendBlocks(collection string, keys []string, blo
 	}
 
 	successes := make([]bool, len(keys))
-	batchEntries := make(map[string][]byte)
 
-	// Phase 1: In-Memory updates & preparation
-	var walEntries []WALEntry
-
+	// Phase 1: WAL Batch Logging
+	walEntries := make([]WALEntry, len(keys))
 	for i, key := range keys {
 		block := blocks[i]
-
-		// Prepare WAL entry
-		walEntries = append(walEntries, WALEntry{
+		walEntries[i] = WALEntry{
 			Timestamp:  time.Now().UnixNano(),
 			OpType:     WALOpAdd,
 			Collection: collection,
@@ -184,24 +180,30 @@ func (vm *VectorManager) BatchAppendBlocks(collection string, keys []string, blo
 			Vector:     block.Vector,
 			Keywords:   block.Keywords,
 			Data:       []byte(block.Primary),
-		})
-
-		index, err := coll.AppendBlock(key, block)
-		if err != nil {
-			continue
 		}
+	}
 
-		vectorID, err := coll.GetBlockVectorID(key, index)
-		if err != nil {
-			continue
-		}
+	if err := vm.wal.LogBatch(walEntries); err != nil {
+		return successes, fmt.Errorf("WAL batch logging failed: %w", err)
+	}
 
-		// Serialize Entry
+	// Phase 2: Batch Collection Insert (single lock, batch HNSW)
+	results, err := coll.BatchAppendBlocks(keys, blocks)
+	if err != nil {
+		return successes, err
+	}
+
+	// Phase 3: Batch Storage Write
+	batchEntries := make(map[string][]byte)
+	for i, key := range keys {
+		block := blocks[i]
+		result := results[i]
+
 		entry := &Entry{
 			Key:           []byte(key),
 			Keywords:      block.Keywords,
 			PrimaryData:   []byte(block.Primary),
-			SecondaryData: VectorIDToBytes(vectorID),
+			SecondaryData: VectorIDToBytes(result.VectorID),
 			Flags:         types.EntryFlags{},
 		}
 		if len(block.Vector) > 0 {
@@ -217,29 +219,14 @@ func (vm *VectorManager) BatchAppendBlocks(collection string, keys []string, blo
 		successes[i] = true
 	}
 
-	// Write WAL Batch
-	if len(walEntries) > 0 {
-		// Fix timestamps
-		// Need "time" package. storage package usually has it.
-		if err := vm.wal.LogBatch(walEntries); err != nil {
-			return successes, fmt.Errorf("WAL batch logging failed: %w", err)
-		}
-	}
-
-	// Phase 2: Batch Storage Write
 	if len(batchEntries) > 0 {
 		if err := vm.Manager.BatchAppend(batchEntries); err != nil {
-			// If storage fails, technically we are in inconsistent state (memory has it, disk doesn't).
-			// Robustness would require rollback or repair.
-			// For this implementation, we return error.
 			return successes, fmt.Errorf("batch storage write failed: %w", err)
 		}
 	}
 
-	// Flush HNSW once after batch completes for durability
-	if err := coll.FlushHNSW(); err != nil {
-		return successes, fmt.Errorf("HNSW flush failed: %w", err)
-	}
+	// NOTE: FlushHNSW removed for performance.
+	// Durability relies on WAL recovery + periodic Checkpoint.
 
 	return successes, nil
 }

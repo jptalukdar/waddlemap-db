@@ -135,7 +135,11 @@ func (hw *HNSWWrapper) randomLevel() int {
 func (hw *HNSWWrapper) Add(vectorID uint64, vector []float32) error {
 	hw.mu.Lock()
 	defer hw.mu.Unlock()
+	return hw.addUnlocked(vectorID, vector)
+}
 
+// addUnlocked inserts a vector without acquiring the lock (caller must hold lock).
+func (hw *HNSWWrapper) addUnlocked(vectorID uint64, vector []float32) error {
 	if uint32(len(vector)) != hw.dimensions {
 		return fmt.Errorf("vector dimension mismatch: expected %d, got %d", hw.dimensions, len(vector))
 	}
@@ -196,6 +200,24 @@ func (hw *HNSWWrapper) Add(vectorID uint64, vector []float32) error {
 		hw.entryPoint = vectorID
 	}
 
+	return nil
+}
+
+// BatchAdd inserts multiple vectors efficiently under a single lock.
+func (hw *HNSWWrapper) BatchAdd(items []struct {
+	ID     uint64
+	Vector []float32
+}) error {
+	hw.mu.Lock()
+	defer hw.mu.Unlock()
+
+	for _, item := range items {
+		if err := hw.addUnlocked(item.ID, item.Vector); err != nil {
+			// Continue on error to insert as many as possible
+			// Could track errors if needed
+			continue
+		}
+	}
 	return nil
 }
 
