@@ -47,14 +47,16 @@ func NewManager(cfg *types.DBSchemaConfig) (*Manager, error) {
 		Compression: true,
 	}
 
-	if err := os.MkdirAll(cfg.DataPath, 0755); err != nil {
+	// Create data directory inside DataPath
+	dataPath := filepath.Join(cfg.DataPath, "data")
+	if err := os.MkdirAll(dataPath, 0755); err != nil {
 		return nil, err
 	}
 
 	for i := 0; i < PartitionCount; i++ {
 		bucketID := uint32(i)
 		fileName := fmt.Sprintf("waddle_shard_%03d.db", bucketID)
-		filePath := filepath.Join(cfg.DataPath, fileName)
+		filePath := filepath.Join(dataPath, fileName) // Use subdirectory
 
 		f, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE, 0644)
 		if err != nil {

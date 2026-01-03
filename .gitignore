@@ -184,3 +184,4 @@ cython_debug/
 /waddlemap_db
 *.bin
 /clients/python/waddlemap_db
+/tests/chroma_data

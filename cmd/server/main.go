@@ -35,7 +35,7 @@ func main() {
 	}
 
 	// 2. Storage
-	storageMgr, err := storage.NewManager(cfg)
+	storageMgr, err := storage.NewVectorManager(cfg)
 	if err != nil {
 		log.Fatalf("Failed to init storage: %v", err)
 	}

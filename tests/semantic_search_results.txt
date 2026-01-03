@@ -1,0 +1,41 @@
+Initializing WaddleDB Client...
+Deleted existing collection 'omega_db'
+Creating collection 'omega_db' with dimensions=384...
+Loading SentenceTransformer model...
+Parsing document...
+Found 10 chunks.
+Ingesting chunks...
+  Ingesting chunk 0: Introduction
+  Ingesting chunk 1: Executive Summary
+  Ingesting chunk 2: System Architecture
+  Ingesting chunk 3: 1. Physical Layer
+  Ingesting chunk 4: 2. Edge Layer
+  Ingesting chunk 5: 3. Core Layer ("The Hive")
+  Ingesting chunk 6: Hardware Specifications (AGD-X1)
+  Ingesting chunk 7: Financial Overview
+  Ingesting chunk 8: Risk Analysis
+  Ingesting chunk 9: Conclusion
+
+--- Running Search Tests ---
+
+Query: "How does the system handle bad weather or snow?"
+  Found: 1.3593 | small_data.md | ## Risk Analysis  - **Cyber Security:**       - High risk of signal jamming or "man-in-the-middle" a...
+
+Query: "What is the battery life and range of the delivery robots?"
+  Found: 1.1779 | small_data.md | ## Hardware Specifications (AGD-X1)  - **Chassis:** Monocoque carbon-fiber reinforced polymer, alumi...
+
+Query: "Cost breakdown for the manufacturing phase"
+  Found: 1.0116 | small_data.md | ## Financial Overview  | Category             | Budget   | Details                                  ...
+
+Query: "AI routing and cloud control"
+  Found: 1.0590 | small_data.md | ### 3. Core Layer ("The Hive")  - **Cloud-based orchestration engine** - **Technologies:**       - D...
+
+Query: "Project Omega launch date"
+  Found: 1.2916 | small_data.md | ## Conclusion  Project Omega represents a pivotal shift in automated logistics. By decoupling the de...
+
+Query: "Maximum payload capacity"
+  Found: 1.4653 | small_data.md | ### 1. Physical Layer  - **AGD-X1 rover fleet:** Six-wheeled, semi-autonomous vehicles - **Features:...
+
+Query: "Encryption and security protocols"
+  Found: 1.3388 | small_data.md | ## Risk Analysis  - **Cyber Security:**       - High risk of signal jamming or "man-in-the-middle" a...
+

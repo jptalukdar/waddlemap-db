@@ -85,35 +85,65 @@ func (s *Server) handleConnection(conn net.Conn) {
 		}
 
 		// Determine Operation
+		// Determine Operation
 		switch op := reqPb.Operation.(type) {
-		case *pb.WaddleRequest_AddVal:
-			ctx.Operation = types.OpAddValue
-			ctx.Params = op.AddVal
-		case *pb.WaddleRequest_CheckKey:
-			ctx.Operation = types.OpCheckKey
-			ctx.Params = op.CheckKey
-		case *pb.WaddleRequest_GetVal:
-			ctx.Operation = types.OpGetValue
-			ctx.Params = op.GetVal
-		case *pb.WaddleRequest_GetLen:
-			ctx.Operation = types.OpGetLength
-			ctx.Params = op.GetLen
-		case *pb.WaddleRequest_UpdateVal:
-			ctx.Operation = types.OpUpdateValue
-			ctx.Params = op.UpdateVal
-		case *pb.WaddleRequest_SearchGlobal:
-			ctx.Operation = types.OpSearchGlobal
-			ctx.Params = op.SearchGlobal
-		case *pb.WaddleRequest_Snapshot:
-			ctx.Operation = types.OpSnapshot
-			ctx.Params = op.Snapshot
-		case *pb.WaddleRequest_GetKeys:
-			ctx.Operation = types.OpGetKeys
-			ctx.Params = op.GetKeys
-		case *pb.WaddleRequest_GetValList:
-			ctx.Operation = types.OpGetValueList
-			ctx.Params = op.GetValList
-
+		case *pb.WaddleRequest_CreateCol:
+			ctx.Operation = types.OpCreateCollection
+			ctx.Params = op.CreateCol
+		case *pb.WaddleRequest_DeleteCol:
+			ctx.Operation = types.OpDeleteCollection
+			ctx.Params = op.DeleteCol
+		case *pb.WaddleRequest_ListCols:
+			ctx.Operation = types.OpListCollections
+			ctx.Params = op.ListCols
+		case *pb.WaddleRequest_CompactCol:
+			ctx.Operation = types.OpCompactCollection
+			ctx.Params = op.CompactCol
+		case *pb.WaddleRequest_AppendBlock:
+			ctx.Operation = types.OpAppendBlock
+			ctx.Params = op.AppendBlock
+		case *pb.WaddleRequest_GetBlock:
+			ctx.Operation = types.OpGetBlock
+			ctx.Params = op.GetBlock
+		case *pb.WaddleRequest_GetVector:
+			ctx.Operation = types.OpGetVector
+			ctx.Params = op.GetVector
+		case *pb.WaddleRequest_GetKeyLen:
+			ctx.Operation = types.OpGetKeyLength
+			ctx.Params = op.GetKeyLen
+		case *pb.WaddleRequest_GetKey:
+			ctx.Operation = types.OpGetKey
+			ctx.Params = op.GetKey
+		case *pb.WaddleRequest_DeleteKey:
+			ctx.Operation = types.OpDeleteKey
+			ctx.Params = op.DeleteKey
+		case *pb.WaddleRequest_ListKeys:
+			ctx.Operation = types.OpListKeys
+			ctx.Params = op.ListKeys
+		case *pb.WaddleRequest_ContainsKey:
+			ctx.Operation = types.OpContainsKey
+			ctx.Params = op.ContainsKey
+		case *pb.WaddleRequest_UpdateBlock:
+			ctx.Operation = types.OpUpdateBlock
+			ctx.Params = op.UpdateBlock
+		case *pb.WaddleRequest_ReplaceBlock:
+			ctx.Operation = types.OpReplaceBlock
+			ctx.Params = op.ReplaceBlock
+		case *pb.WaddleRequest_Search:
+			ctx.Operation = types.OpSearch
+			ctx.Params = op.Search
+		case *pb.WaddleRequest_SearchMlt:
+			ctx.Operation = types.OpSearchMLT
+			ctx.Params = op.SearchMlt
+		case *pb.WaddleRequest_SearchInKey:
+			ctx.Operation = types.OpSearchInKey
+			ctx.Params = op.SearchInKey
+		case *pb.WaddleRequest_KeywordSearch:
+			ctx.Operation = types.OpKeywordSearch
+			ctx.Params = op.KeywordSearch
+		case *pb.WaddleRequest_SnapshotCol:
+			ctx.Operation = types.OpSnapshotCollection
+			ctx.Params = op.SnapshotCol
 		default:
 			log.Printf("Unknown operation: %T\n", reqPb.Operation)
 			continue
@@ -139,16 +169,18 @@ func (s *Server) handleConnection(conn net.Conn) {
 		// Map Result
 		if respCtx.Data != nil {
 			switch d := respCtx.Data.(type) {
-			case *pb.DataItem:
-				respPb.Result = &pb.WaddleResponse_Item{Item: d}
 			case uint64:
 				respPb.Result = &pb.WaddleResponse_Length{Length: d}
-			case *pb.SearchResult:
-				respPb.Result = &pb.WaddleResponse_SearchResults{SearchResults: d}
 			case *pb.KeyList:
 				respPb.Result = &pb.WaddleResponse_KeyList{KeyList: d}
-			case *pb.ValueList:
-				respPb.Result = &pb.WaddleResponse_ValueList{ValueList: d}
+			case *pb.CollectionList:
+				respPb.Result = &pb.WaddleResponse_ColList{ColList: d}
+			case *pb.SearchResultList:
+				respPb.Result = &pb.WaddleResponse_SearchList{SearchList: d}
+			case *pb.BlockData:
+				respPb.Result = &pb.WaddleResponse_Block{Block: d}
+			case *pb.BlockList:
+				respPb.Result = &pb.WaddleResponse_BlockList{BlockList: d}
 			}
 		}
 
