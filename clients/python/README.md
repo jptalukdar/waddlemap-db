@@ -9,6 +9,8 @@ The WaddleMap Python client provides a simple, object-oriented interface to inte
 ```bash
 # Ensure you have the protobuf files generated
 # No additional installation needed - just import waddle_client
+# Or install using the package (once distributed):
+# pip install waddle-client
 ```
 
 ## Quick Start
@@ -30,13 +32,13 @@ collection = client.create_collection(
 collection.append_block(
     key="doc1",
     primary="This is my document text",
-    vector=[0.1, 0.2, 0.3, ...],  # 384-dimensional vector
+    vector=[0.1, 0.2, 0.3],  # Example vector (use real embedding)
     keywords=["tag1", "tag2"]
 )
 
 # Search by vector
 results = collection.search(
-    vector=[0.1, 0.2, 0.3, ...],
+    vector=[0.1, 0.2, 0.3],
     top_k=10
 )
 
@@ -197,49 +199,17 @@ Performs keyword search in this collection.
 ##### `delete()`
 Deletes this entire collection.
 
-## Migration from Old API
 
-If you're upgrading from an older version that had methods like `add_value`, `get_value`, etc., here's the mapping:
 
-### Old API → New API
 
-| Old Method | New Method |
-|------------|------------|
-| `client.create_collection(name, dims)` | `collection = client.create_collection(name, dims)` |
-| `client.append_block(col, key, primary, ...)` | `collection.append_block(key, primary, ...)` |
-| `client.get_block(col, key, idx)` | `collection.get_block(key, idx)` |
-| `client.search(col, vector, k)` | `collection.search(vector, k)` |
-| `client.delete_key(col, key)` | `collection.delete_key(key)` |
-| `client.list_keys(col)` | `collection.list_keys()` |
-| `client.keyword_search(col, kw)` | `collection.keyword_search(kw)` |
-
-### Example Migration
-
-**Old Code:**
-```python
-client = WaddleClient()
-client.create_collection("mycol", 384)
-client.append_block("mycol", "key1", "data", vector=[...])
-results = client.search("mycol", [0.1, 0.2, ...], 10)
-```
-
-**New Code:**
-```python
-client = WaddleClient()
-collection = client.create_collection("mycol", 384)
-collection.append_block("key1", "data", vector=[...])
-results = collection.search([0.1, 0.2, ...], 10)
-```
 
 ## Examples
 
 See the following files for complete examples:
-- `test_block_store.py` - Basic CRUD operations
-- `test_driver.py` - Full feature test
-- `benchmark.py` - Performance benchmarking
-- `../tests/semantic_search_test.py` - Semantic search example
-- `../tests/evaluation_test.py` - Evaluation benchmark
-- `../tests/comparison_test.py` - Comparison with ChromaDB
+- `../../tests/feature_test.py` - Full feature test covering most API methods
+- `../../tests/semantic_search_test.py` - Semantic search example
+- `../../tests/evaluation_test.py` - Evaluation benchmark
+- `../../tests/comparison_test.py` - Performance comparison with ChromaDB
 
 ## Notes
 

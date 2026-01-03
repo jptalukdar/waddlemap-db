@@ -16,7 +16,7 @@ WaddleMap-DB is a high-performance, sharded, append-optimized array database wri
    # Quiet mode (errors only)
    .\waddle-server.exe -quiet
    ```
-   This will create a `data/` directory if it does not exist.
+   This will create a `waddlemap_db/` directory if it does not exist.
 
 ## Performance Benchmarks
 
@@ -91,7 +91,7 @@ client.close()
    This will run a basic CRUD test using the Python client.
 
 ## More Examples
-- See `clients/python/test_block_store.py` for a basic test
+- See `tests/feature_test.py` for a basic test
 - See `tests/semantic_search_test.py` for a semantic search example
 - See `tests/comparison_test.py` for the performance benchmark
 
