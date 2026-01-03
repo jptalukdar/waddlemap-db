@@ -1,5 +1,7 @@
 # About Dataset
 
+Source: https://www.kaggle.com/datasets/samuelmatsuoharris/single-topic-rag-evaluation-dataset/data
+
 ## What is this dataset?
 
 This dataset was designed to evaluate the performance of RAG AI querying text documents about a single topic with word counts ranging from a few thousand to a few tens of thousands, such as articles, blogs, and documentation. The sources were intentionally chosen to have been produced within the last few years (from the time of writing in July 2024) and to be relatively niche, to reduce the chance of evaluated LLMs including this information in their training datasets.
