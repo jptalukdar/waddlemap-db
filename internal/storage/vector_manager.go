@@ -150,6 +150,11 @@ func (vm *VectorManager) AppendBlock(collection, key string, block *types.BlockD
 		return index, fmt.Errorf("storage append failed: %w", err)
 	}
 
+	// Flush HNSW to disk for durability
+	if err := coll.FlushHNSW(); err != nil {
+		return index, fmt.Errorf("HNSW flush failed: %w", err)
+	}
+
 	return index, nil
 }
 
@@ -213,6 +218,11 @@ func (vm *VectorManager) BatchAppendBlocks(collection string, keys []string, blo
 			// For this implementation, we return error.
 			return successes, fmt.Errorf("batch storage write failed: %w", err)
 		}
+	}
+
+	// Flush HNSW once after batch completes for durability
+	if err := coll.FlushHNSW(); err != nil {
+		return successes, fmt.Errorf("HNSW flush failed: %w", err)
 	}
 
 	return successes, nil

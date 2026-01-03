@@ -2,109 +2,113 @@ import time
 import sys
 from waddle_client import WaddleClient
 
+
 def main():
     print("Starting WaddleMap Full Operation Test...")
     client = WaddleClient()
-    
+
+    # Create test collection
+    collection_name = "test_collection"
+    try:
+        client.delete_collection(collection_name)
+    except:
+        pass
+
+    collection = client.create_collection(collection_name, dimensions=4)
+
     try:
         key = "sensor_X"
-        payload_1 = b"Data_Block_1"
-        payload_2 = b"Data_Block_2"
-        payload_upd = b"Data_Block_U" # Same size as 1
+        primary_1 = "Data_Block_1"
+        primary_2 = "Data_Block_2"
+        primary_upd = "Data_Block_U"
+        vector_1 = [0.1, 0.2, 0.3, 0.4]
+        vector_2 = [0.2, 0.3, 0.4, 0.5]
 
-        # 1. Add Value 1
-        print("Test 1: Add Value 1...", end="")
-        resp = client.add_value(key, payload_1)
-        if not resp.success: raise Exception(resp.error_message)
+        # 1. Append Block 1
+        print("Test 1: Append Block 1...", end="")
+        collection.append_block(key, primary_1, vector=vector_1, keywords=["block1"])
         print(" PASS")
 
-        # 2. Add Value 2
-        print("Test 2: Add Value 2...", end="")
-        resp = client.add_value(key, payload_2)
-        if not resp.success: raise Exception(resp.error_message)
+        # 2. Append Block 2
+        print("Test 2: Append Block 2...", end="")
+        collection.append_block(key, primary_2, vector=vector_2, keywords=["block2"])
         print(" PASS")
 
-        # 3. Get Length
-        print("Test 3: Get Length...", end="")
-        resp = client.get_length(key)
-        if resp.success and resp.length == 2:
-            print(f" PASS (Len: {resp.length})")
-        else:
-            raise Exception(f"Expected 2, got {resp.length}")
-
-        # 4. Get Value (Index 0)
-        print("Test 4: Get Value (idx 0)...", end="")
-        resp = client.get_value(key, 0)
-        if resp.success and resp.item.payload == payload_1:
-             print(" PASS")
-        else:
-             raise Exception(f"Expected {payload_1}, got {resp.item.payload}")
-
-        # 5. Update Value (Index 0)
-        print("Test 5: Update Value (idx 0)...", end="")
-        resp = client.update_value(key, 0, payload_upd)
-        if not resp.success: raise Exception(resp.error_message)
-        
-        # Verify Update
-        resp = client.get_value(key, 0)
-        if resp.item.payload == payload_upd:
-            print(" PASS (Verified Update)")
-        else:
-            raise Exception("Update verification failed")
-
-        # 6. Global Search
-        print("Test 6: Global Search...", end="")
-        resp = client.search_global(b"Block_2")
-        if resp.success and len(resp.search_results.items) >= 1:
-            print(f" PASS (Found {len(resp.search_results.items)} matches)")
-        else:
-             raise Exception("Search failed or no results")
-
-        # 7. Snapshot
-        print("Test 7: Snapshot...", end="")
-        resp = client.snapshot("test_snap_1")
-        if resp.success:
+        # 3. Get Block (Index 0)
+        print("Test 3: Get Block (idx 0)...", end="")
+        block = collection.get_block(key, 0)
+        if block.primary == primary_1:
             print(" PASS")
         else:
-             raise Exception(resp.error_message)
+            raise Exception(f"Expected {primary_1}, got {block.primary}")
 
-        # 8. Get Keys
-        print("Test 8: Get Keys...", end="")
-        resp = client.get_keys()
-        if resp.success:
-            keys = resp.key_list.keys
-            if key in keys:
-                print(f" PASS (Found {len(keys)} keys)")
-            else:
-                raise Exception(f"Key {key} not found in key list: {keys}")
+        # 4. Get Block (Index 1)
+        print("Test 4: Get Block (idx 1)...", end="")
+        block = collection.get_block(key, 1)
+        if block.primary == primary_2:
+            print(" PASS")
         else:
-            raise Exception(resp.error_message)
+            raise Exception(f"Expected {primary_2}, got {block.primary}")
 
-        # 9. Get Value List
-        print("Test 9: Get Value List...", end="")
-        # We updated index 0 to payload_upd. Let's add another value to check list.
-        payload_3 = b"Data_Block_3"
-        client.add_value(key, payload_3)
-        
-        resp = client.get_value_list(key)
-        if resp.success:
-            items = resp.value_list.items
-            # We expect: [0]=payload_upd, [1]=payload_2, [2]=payload_3
-            # Note: Index 0 was updated. Index 1 was payload_2. Index 2 is payload_3.
-            if len(items) >= 3:
-                print(f" PASS (Retrieved {len(items)} items)")
-            else:
-                 raise Exception(f"Expected >=3 items, got {len(items)}")
+        # 5. Vector Search
+        print("Test 5: Vector Search...", end="")
+        results = collection.search(vector_1, top_k=2)
+        if len(results) >= 1:
+            print(f" PASS (Found {len(results)} matches)")
         else:
-            raise Exception(resp.error_message)
+            raise Exception("Search failed or no results")
+
+        # 6. Keyword Search
+        print("Test 6: Keyword Search...", end="")
+        keys = collection.keyword_search(["block1"])
+        if key in keys:
+            print(f" PASS (Found key)")
+        else:
+            raise Exception(f"Key {key} not found in keyword search")
+
+        # 7. List Keys
+        print("Test 7: List Keys...", end="")
+        keys = collection.list_keys()
+        if key in keys:
+            print(f" PASS (Found {len(keys)} keys)")
+        else:
+            raise Exception(f"Key {key} not found in key list: {keys}")
+
+        # 8. Contains Key
+        print("Test 8: Contains Key...", end="")
+        if collection.contains_key(key):
+            print(" PASS")
+        else:
+            raise Exception("Contains key check failed")
+
+        # 9. Batch Append
+        print("Test 9: Batch Append...", end="")
+        items = [
+            {
+                "key": "batch_1",
+                "primary": "Batch Item 1",
+                "vector": [0.5, 0.6, 0.7, 0.8],
+                "keywords": ["batch"],
+            },
+            {
+                "key": "batch_2",
+                "primary": "Batch Item 2",
+                "vector": [0.6, 0.7, 0.8, 0.9],
+                "keywords": ["batch"],
+            },
+        ]
+        collection.batch_append_blocks(items)
+        print(" PASS")
 
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         print(f"\n[FAIL] Client Test Error: {e}")
         sys.exit(1)
     finally:
         client.close()
+
 
 if __name__ == "__main__":
     main()

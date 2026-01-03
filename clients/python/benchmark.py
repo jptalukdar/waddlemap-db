@@ -11,17 +11,20 @@ PORT = 6969
 NUM_PROCESSES = 4
 ITEMS_PER_PROCESS = 1000
 PAYLOAD_SIZE = 128  # bytes
+COLLECTION_NAME = "benchmark"
 
 def worker_write(pid, count):
     client = WaddleClient(HOST, PORT)
+    collection = client.collection(COLLECTION_NAME)
     payload = b'X' * PAYLOAD_SIZE
     start = time.time()
     
     for i in range(count):
         key = f"user_{pid}_{i}"
-        resp = client.add_value(key, payload)
-        if not resp.success:
-            print(f"Write failed: {resp.error_message}")
+        try:
+            collection.append_block(key, payload.decode('latin-1'))
+        except Exception as e:
+            print(f"Write failed: {e}")
             
     duration = time.time() - start
     client.close()
@@ -29,6 +32,7 @@ def worker_write(pid, count):
 
 def worker_read(pid, count):
     client = WaddleClient(HOST, PORT)
+    collection = client.collection(COLLECTION_NAME)
     start = time.time()
     
     for i in range(count):
@@ -36,8 +40,9 @@ def worker_read(pid, count):
         idx = random.randint(0, count-1)
         key = f"user_{pid}_{idx}"
         # We know we only added 1 item per key in write phase, so index 0
-        resp = client.get_value(key, 0)
-        if not resp.success:
+        try:
+            collection.get_block(key, 0)
+        except:
             # Might fail if we persist data but restart index (if not persisted properly)
             # But for this run, it should be fine.
             pass
@@ -46,55 +51,33 @@ def worker_read(pid, count):
     client.close()
     return count, duration
 
-def worker_update(pid, count):
-    client = WaddleClient(HOST, PORT)
-    payload = b'U' * PAYLOAD_SIZE
-    start = time.time()
-    
-    for i in range(count):
-        idx = random.randint(0, count-1)
-        key = f"user_{pid}_{idx}"
-        # Update index 0
-        client.update_value(key, 0, payload)
-            
-    duration = time.time() - start
-    client.close()
-    return count, duration
-
 def worker_check_key(pid, count):
     client = WaddleClient(HOST, PORT)
+    collection = client.collection(COLLECTION_NAME)
     start = time.time()
     
     for i in range(count):
         idx = random.randint(0, count-1)
         key = f"user_{pid}_{idx}"
-        client.check_key(key)
+        try:
+            collection.contains_key(key)
+        except:
+            pass
             
     duration = time.time() - start
     client.close()
     return count, duration
 
-def worker_get_length(pid, count):
+def worker_list_keys(pid, count):
     client = WaddleClient(HOST, PORT)
+    collection = client.collection(COLLECTION_NAME)
     start = time.time()
     
     for i in range(count):
-        idx = random.randint(0, count-1)
-        key = f"user_{pid}_{idx}"
-        client.get_length(key)
-            
-    duration = time.time() - start
-    client.close()
-    return count, duration
-
-def worker_get_value_list(pid, count):
-    client = WaddleClient(HOST, PORT)
-    start = time.time()
-    
-    for i in range(count):
-        idx = random.randint(0, count-1)
-        key = f"user_{pid}_{idx}"
-        client.get_value_list(key)
+        try:
+            collection.list_keys()
+        except:
+            pass
             
     duration = time.time() - start
     client.close()
@@ -155,24 +138,40 @@ def main():
     
     # 7. Search Phase (Single threaded latency test)
     print("\n--- Starting SEARCH Phase ---")
+    # Initialize collection
+    print("Setting up collection...")
     client = WaddleClient(HOST, PORT)
-    start = time.time()
-    resp = client.search_global(b'X' * 10) 
-    duration = time.time() - start
-    hits = len(resp.search_results.items) if resp.success else 0
-    print(f"Search Time: {duration*1000:.2f} ms")
-    print(f"Hits found: {hits}")
-
-    # 8. Get Keys Phase (Single threaded latency test)
-    print("\n--- Starting GET_KEYS Phase ---")
-    start = time.time()
-    resp = client.get_keys()
-    duration = time.time() - start
-    keys_count = len(resp.key_list.keys) if resp.success else 0
-    print(f"GetKeys Time: {duration*1000:.2f} ms")
-    print(f"Keys found: {keys_count}")
-
+    try:
+        client.delete_collection(COLLECTION_NAME)
+    except:
+        pass
+    client.create_collection(COLLECTION_NAME, dimensions=0)  # No vectors for basic benchmark
     client.close()
+    
+    total_items = NUM_PROCESSES * ITEMS_PER_PROCESS
+    
+    # 1. Warmup / Write Phase
+    run_phase("WRITE", worker_write, total_items, NUM_PROCESSES)
+    
+    # 2. Read Phase
+    run_phase("READ", worker_read, total_items, NUM_PROCESSES)
 
-if __name__ == "__main__":
-    main()
+    # 3. Check Key Phase
+    run_phase("CHECK_KEY", worker_check_key, total_items, NUM_PROCESSES)
+
+    # 4. List Keys Phase (reduced iterations as it's expensive)
+    run_phase("LIST_KEYS", worker_list_keys, NUM_PROCESSES * 10, NUM_PROCESSES)
+    
+    # 5. Get Keys Phase (Single threaded latency test)
+    print("\n--- Starting GET_KEYS Phase ---")
+    client = WaddleClient(HOST, PORT)
+    collection = client.collection(COLLECTION_NAME)
+    start = time.time()
+    try:
+        keys = collection.list_keys()
+        duration = time.time() - start
+        keys_count = len(keys)
+        print(f"GetKeys Time: {duration*1000:.2f} ms")
+        print(f"Keys found: {keys_count}")
+    except Exception as e:
+        print(f"Error: {e

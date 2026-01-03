@@ -507,6 +507,14 @@ func (c *Collection) Save() error {
 	return nil
 }
 
+// FlushHNSW saves only the HNSW index to disk.
+// Use this after batch operations to minimize I/O overhead.
+func (c *Collection) FlushHNSW() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.HNSWIndex.Save()
+}
+
 // rebuildMemoryIndexes rebuilds KeyLengths and KeyIndex from DocMap.
 func (c *Collection) rebuildMemoryIndexes() {
 	// Access DocMap directly (already locked by caller or initialized)

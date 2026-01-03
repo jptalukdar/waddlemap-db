@@ -2,17 +2,32 @@ package storage
 
 import (
 	"container/heap"
-	"encoding/gob"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	"waddlemap/internal/types"
+)
+
+// HNSW binary format constants
+const (
+	hnswMagic      = "HNSWV001"
+	hnswHeaderSize = 64
+)
+
+// Metric byte encoding
+const (
+	metricByteL2     uint8 = 0
+	metricByteCosine uint8 = 1
+	metricByteIP     uint8 = 2
 )
 
 // HNSWWrapper provides an HNSW index implementation.
@@ -33,7 +48,8 @@ type HNSWWrapper struct {
 	EfSearch       int     // Size of dynamic candidate list during search
 	MaxLevel       int     // Maximum level in the graph
 
-	mu sync.RWMutex
+	dirty bool // Set on Add/Delete, cleared on Save
+	mu    sync.RWMutex
 }
 
 // hnswNode represents a node in the HNSW graph.
@@ -145,6 +161,7 @@ func (hw *HNSWWrapper) Add(vectorID uint64, vector []float32) error {
 		hw.entryPoint = vectorID
 		hw.hasEntry = true
 		hw.MaxLevel = level
+		hw.dirty = true
 		return nil
 	}
 
@@ -172,6 +189,7 @@ func (hw *HNSWWrapper) Add(vectorID uint64, vector []float32) error {
 	}
 
 	hw.nodes[vectorID] = node
+	hw.dirty = true
 
 	if level > hw.MaxLevel {
 		hw.MaxLevel = level
@@ -412,6 +430,7 @@ func (hw *HNSWWrapper) Delete(vectorID uint64) error {
 
 	// Remove the node
 	delete(hw.nodes, vectorID)
+	hw.dirty = true
 
 	// Update entry point if needed
 	if hw.entryPoint == vectorID {
@@ -451,23 +470,31 @@ func (hw *HNSWWrapper) updateEntryPoint() {
 	}
 }
 
-// graphData is used for serialization.
-type graphData struct {
-	Dimensions uint32
-	Metric     types.DistanceMetric
-	EntryPoint uint64
-	HasEntry   bool
-	MaxLevel   int
-	Nodes      map[uint64]nodeData
+// metricToByte converts distance metric to byte encoding.
+func metricToByte(m types.DistanceMetric) uint8 {
+	switch m {
+	case types.MetricCosine:
+		return metricByteCosine
+	case types.MetricIP:
+		return metricByteIP
+	default:
+		return metricByteL2
+	}
 }
 
-type nodeData struct {
-	Vector    []float32
-	Level     int
-	Neighbors [][]uint64
+// byteToMetric converts byte encoding to distance metric.
+func byteToMetric(b uint8) types.DistanceMetric {
+	switch b {
+	case metricByteCosine:
+		return types.MetricCosine
+	case metricByteIP:
+		return types.MetricIP
+	default:
+		return types.MetricL2
+	}
 }
 
-// Save persists the HNSW index to disk.
+// Save persists the HNSW index to disk in binary format.
 func (hw *HNSWWrapper) Save() error {
 	hw.mu.RLock()
 	defer hw.mu.RUnlock()
@@ -478,28 +505,122 @@ func (hw *HNSWWrapper) Save() error {
 	}
 	defer file.Close()
 
-	data := graphData{
-		Dimensions: hw.dimensions,
-		Metric:     hw.metric,
-		EntryPoint: hw.entryPoint,
-		HasEntry:   hw.hasEntry,
-		MaxLevel:   hw.MaxLevel,
-		Nodes:      make(map[uint64]nodeData),
+	// Collect and sort node IDs for deterministic output
+	nodeIDs := make([]uint64, 0, len(hw.nodes))
+	for id := range hw.nodes {
+		nodeIDs = append(nodeIDs, id)
+	}
+	sort.Slice(nodeIDs, func(i, j int) bool { return nodeIDs[i] < nodeIDs[j] })
+
+	// Calculate offsets
+	vectorSize := hw.dimensions * 4 // float32 = 4 bytes
+	nodeTableSize := uint32(len(hw.nodes)) * 24
+	vectorSectionOffset := uint32(hnswHeaderSize) + nodeTableSize
+
+	// Build node entries and calculate neighbor offsets
+	type nodeEntry struct {
+		id             uint64
+		level          int32
+		vectorOffset   uint32
+		neighborOffset uint32
+		neighborCount  uint32
+	}
+	entries := make([]nodeEntry, len(nodeIDs))
+	neighborOffset := uint32(0)
+
+	for i, id := range nodeIDs {
+		node := hw.nodes[id]
+		// Count total neighbors across all levels
+		totalNeighbors := uint32(0)
+		for _, neighbors := range node.Neighbors {
+			totalNeighbors += uint32(len(neighbors))
+		}
+		// Neighbor section: 2 bytes levelCount + (2 bytes count + N*8 bytes neighbors) per level
+		neighborSize := uint32(2) // levelCount
+		for _, neighbors := range node.Neighbors {
+			neighborSize += 2 + uint32(len(neighbors))*8
+		}
+
+		entries[i] = nodeEntry{
+			id:             id,
+			level:          int32(node.Level),
+			vectorOffset:   uint32(i) * vectorSize,
+			neighborOffset: neighborOffset,
+			neighborCount:  totalNeighbors,
+		}
+		neighborOffset += neighborSize
 	}
 
-	for id, node := range hw.nodes {
-		data.Nodes[id] = nodeData{
-			Vector:    node.Vector,
-			Level:     node.Level,
-			Neighbors: node.Neighbors,
+	neighborSectionOffset := vectorSectionOffset + uint32(len(hw.nodes))*vectorSize
+
+	// Write header (64 bytes)
+	header := make([]byte, hnswHeaderSize)
+	copy(header[0:8], hnswMagic)
+	binary.LittleEndian.PutUint32(header[8:12], hw.dimensions)
+	header[12] = metricToByte(hw.metric)
+	// header[13:16] reserved
+	binary.LittleEndian.PutUint32(header[16:20], uint32(len(hw.nodes)))
+	binary.LittleEndian.PutUint64(header[20:28], hw.entryPoint)
+	binary.LittleEndian.PutUint32(header[28:32], uint32(hw.MaxLevel))
+	binary.LittleEndian.PutUint32(header[32:36], uint32(hw.M))
+	if hw.hasEntry {
+		header[36] = 1
+	}
+	// header[37:64] reserved
+
+	if _, err := file.Write(header); err != nil {
+		return err
+	}
+
+	// Write node table
+	for _, entry := range entries {
+		nodeBuf := make([]byte, 24)
+		binary.LittleEndian.PutUint64(nodeBuf[0:8], entry.id)
+		binary.LittleEndian.PutUint32(nodeBuf[8:12], uint32(entry.level))
+		binary.LittleEndian.PutUint32(nodeBuf[12:16], entry.vectorOffset)
+		binary.LittleEndian.PutUint32(nodeBuf[16:20], neighborSectionOffset+entry.neighborOffset)
+		binary.LittleEndian.PutUint32(nodeBuf[20:24], entry.neighborCount)
+		if _, err := file.Write(nodeBuf); err != nil {
+			return err
 		}
 	}
 
-	encoder := gob.NewEncoder(file)
-	return encoder.Encode(data)
+	// Write vector data
+	for _, id := range nodeIDs {
+		node := hw.nodes[id]
+		for _, v := range node.Vector {
+			if err := binary.Write(file, binary.LittleEndian, v); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Write neighbor lists
+	for _, id := range nodeIDs {
+		node := hw.nodes[id]
+		// Write level count
+		if err := binary.Write(file, binary.LittleEndian, uint16(len(node.Neighbors))); err != nil {
+			return err
+		}
+		for _, neighbors := range node.Neighbors {
+			// Write neighbor count for this level
+			if err := binary.Write(file, binary.LittleEndian, uint16(len(neighbors))); err != nil {
+				return err
+			}
+			// Write neighbor IDs
+			for _, nid := range neighbors {
+				if err := binary.Write(file, binary.LittleEndian, nid); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	hw.dirty = false
+	return nil
 }
 
-// Load reads an HNSW index from disk.
+// Load reads an HNSW index from disk in binary format.
 func (hw *HNSWWrapper) Load() error {
 	hw.mu.Lock()
 	defer hw.mu.Unlock()
@@ -514,34 +635,109 @@ func (hw *HNSWWrapper) Load() error {
 	}
 	defer file.Close()
 
-	var data graphData
-	decoder := gob.NewDecoder(file)
-	if err := decoder.Decode(&data); err != nil {
-		return err
+	// Read header
+	header := make([]byte, hnswHeaderSize)
+	if _, err := io.ReadFull(file, header); err != nil {
+		return fmt.Errorf("failed to read header: %w", err)
 	}
 
-	if data.Dimensions != hw.dimensions {
-		return fmt.Errorf("dimension mismatch: file has %d, expected %d", data.Dimensions, hw.dimensions)
-	}
-	if data.Metric != hw.metric {
-		return fmt.Errorf("metric mismatch: file has %s, expected %s", data.Metric, hw.metric)
+	// Validate magic
+	if string(header[0:8]) != hnswMagic {
+		return errors.New("invalid HNSW file: wrong magic number")
 	}
 
-	hw.entryPoint = data.EntryPoint
-	hw.hasEntry = data.HasEntry
-	hw.MaxLevel = data.MaxLevel
-	hw.nodes = make(map[uint64]*hnswNode)
+	// Parse header
+	dimensions := binary.LittleEndian.Uint32(header[8:12])
+	metric := byteToMetric(header[12])
+	nodeCount := binary.LittleEndian.Uint32(header[16:20])
+	entryPoint := binary.LittleEndian.Uint64(header[20:28])
+	maxLevel := int(binary.LittleEndian.Uint32(header[28:32]))
+	// M at header[32:36] - we use our configured value
+	hasEntry := header[36] == 1
 
-	for id, nd := range data.Nodes {
-		hw.nodes[id] = &hnswNode{
-			ID:        id,
-			Vector:    nd.Vector,
-			Level:     nd.Level,
-			Neighbors: nd.Neighbors,
+	// Validate
+	if dimensions != hw.dimensions {
+		return fmt.Errorf("dimension mismatch: file has %d, expected %d", dimensions, hw.dimensions)
+	}
+	if metric != hw.metric {
+		return fmt.Errorf("metric mismatch: file has %s, expected %s", metric, hw.metric)
+	}
+
+	// Read node table
+	type nodeEntry struct {
+		id             uint64
+		level          int32
+		vectorOffset   uint32
+		neighborOffset uint32
+		neighborCount  uint32
+	}
+	entries := make([]nodeEntry, nodeCount)
+	for i := uint32(0); i < nodeCount; i++ {
+		nodeBuf := make([]byte, 24)
+		if _, err := io.ReadFull(file, nodeBuf); err != nil {
+			return fmt.Errorf("failed to read node table entry %d: %w", i, err)
+		}
+		entries[i] = nodeEntry{
+			id:             binary.LittleEndian.Uint64(nodeBuf[0:8]),
+			level:          int32(binary.LittleEndian.Uint32(nodeBuf[8:12])),
+			vectorOffset:   binary.LittleEndian.Uint32(nodeBuf[12:16]),
+			neighborOffset: binary.LittleEndian.Uint32(nodeBuf[16:20]),
+			neighborCount:  binary.LittleEndian.Uint32(nodeBuf[20:24]),
 		}
 	}
 
+	// Read vectors
+	nodes := make(map[uint64]*hnswNode)
+	for _, entry := range entries {
+		vector := make([]float32, dimensions)
+		for j := uint32(0); j < dimensions; j++ {
+			if err := binary.Read(file, binary.LittleEndian, &vector[j]); err != nil {
+				return fmt.Errorf("failed to read vector for node %d: %w", entry.id, err)
+			}
+		}
+		nodes[entry.id] = &hnswNode{
+			ID:     entry.id,
+			Vector: vector,
+			Level:  int(entry.level),
+		}
+	}
+
+	// Read neighbor lists
+	for _, entry := range entries {
+		node := nodes[entry.id]
+		var levelCount uint16
+		if err := binary.Read(file, binary.LittleEndian, &levelCount); err != nil {
+			return fmt.Errorf("failed to read level count for node %d: %w", entry.id, err)
+		}
+		node.Neighbors = make([][]uint64, levelCount)
+		for l := uint16(0); l < levelCount; l++ {
+			var neighborCount uint16
+			if err := binary.Read(file, binary.LittleEndian, &neighborCount); err != nil {
+				return fmt.Errorf("failed to read neighbor count for node %d level %d: %w", entry.id, l, err)
+			}
+			node.Neighbors[l] = make([]uint64, neighborCount)
+			for n := uint16(0); n < neighborCount; n++ {
+				if err := binary.Read(file, binary.LittleEndian, &node.Neighbors[l][n]); err != nil {
+					return fmt.Errorf("failed to read neighbor for node %d: %w", entry.id, err)
+				}
+			}
+		}
+	}
+
+	hw.nodes = nodes
+	hw.entryPoint = entryPoint
+	hw.hasEntry = hasEntry
+	hw.MaxLevel = maxLevel
+	hw.dirty = false
+
 	return nil
+}
+
+// IsDirty returns true if the index has unsaved changes.
+func (hw *HNSWWrapper) IsDirty() bool {
+	hw.mu.RLock()
+	defer hw.mu.RUnlock()
+	return hw.dirty
 }
 
 // Count returns the number of vectors in the index.

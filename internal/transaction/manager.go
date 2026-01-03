@@ -33,6 +33,20 @@ func (tm *Manager) dispatch() {
 func (tm *Manager) handle(req types.RequestContext) {
 	var resp types.ResponseContext
 	resp.ReqID = req.ReqID
+
+	// Recover from panics to prevent crashing the server
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Transaction Manager: PANIC in request %s: %v", req.ReqID, r)
+			resp.Success = false
+			resp.Error = fmt.Errorf("internal error: %v", r)
+			select {
+			case req.RespChan <- resp:
+			default:
+			}
+		}
+	}()
+
 	log.Printf("Transaction Manager: Handling request %s (op: %d)\n", req.ReqID, req.Operation)
 	switch req.Operation {
 	// Collection Ops
@@ -285,16 +299,19 @@ func (tm *Manager) handle(req types.RequestContext) {
 				resp.Success = true
 				sList := &pb.SearchResultList{}
 				for _, r := range res {
-					sList.Results = append(sList.Results, &pb.SearchResultItem{
+					item := &pb.SearchResultItem{
 						Key:      r.Key,
 						Index:    r.Index,
 						Distance: r.Distance,
-						Block: &pb.BlockData{
+					}
+					if r.Block != nil {
+						item.Block = &pb.BlockData{
 							Primary:  r.Block.Primary,
 							Vector:   r.Block.Vector,
 							Keywords: r.Block.Keywords,
-						},
-					})
+						}
+					}
+					sList.Results = append(sList.Results, item)
 				}
 				resp.Data = sList
 			}
