@@ -357,6 +357,19 @@ func (m *Manager) Update(key string, index int, payload []byte) error {
 	return nil // No sync forced here unless strict
 }
 
+// DeleteKey removes the key from the in-memory index.
+// Note: The data remains on disk until compaction (not yet implemented).
+// If the index is rebuilt from disk, this data might reappear unless a tombstone is written.
+func (m *Manager) DeleteKey(key string) error {
+	bucket := m.Buckets[m.getBucketID(key)]
+
+	bucket.IndexLock.Lock()
+	delete(bucket.Index, key)
+	bucket.IndexLock.Unlock()
+
+	return nil
+}
+
 func (m *Manager) SearchGlobal(pattern []byte) ([][]byte, error) {
 	var results [][]byte
 	var mu sync.Mutex
