@@ -1,0 +1,68 @@
+name: Release Build
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    # Only run if PR was merged
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set Release Version
+        run: echo "RELEASE_VERSION=0.${{ github.run_number }}" >> $GITHUB_ENV
+
+      # --- Go Build ---
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Build Go Binaries
+        run: |
+          mkdir dist
+          echo "Building Windows..."
+          GOOS=windows GOARCH=amd64 go build -o dist/waddle-server-windows-amd64.exe ./cmd/server
+          echo "Building Linux..."
+          GOOS=linux GOARCH=amd64 go build -o dist/waddle-server-linux-amd64 ./cmd/server
+          echo "Building macOS (Intel)..."
+          GOOS=darwin GOARCH=amd64 go build -o dist/waddle-server-darwin-amd64 ./cmd/server
+          echo "Building macOS (Apple Silicon)..."
+          GOOS=darwin GOARCH=arm64 go build -o dist/waddle-server-darwin-arm64 ./cmd/server
+
+      # --- Python Bundle ---
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Build Python Client
+        working-directory: clients/python
+        run: |
+          pip install --upgrade pip build
+          # Dynamically set version in setup.py
+          sed -i "s/version=\"0.1.0\"/version=\"${{ env.RELEASE_VERSION }}\"/" setup.py
+          python -m build
+          # Copy artifacts to main dist directory
+          cp dist/* ../../dist/
+
+      # --- Create Release ---
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.RELEASE_VERSION }}
+          name: Release v${{ env.RELEASE_VERSION }}
+          files: dist/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
