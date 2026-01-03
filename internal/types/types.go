@@ -23,6 +23,7 @@ const (
 	OpSearchInKey
 	OpKeywordSearch
 	OpSnapshotCollection
+	OpBatchAppendBlock
 )
 
 // DBSchemaConfig holds database configuration.

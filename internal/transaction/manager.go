@@ -108,6 +108,31 @@ func (tm *Manager) handle(req types.RequestContext) {
 			}
 		}
 
+	case types.OpBatchAppendBlock:
+		if params, ok := req.Params.(*pb.BatchAppendBlockRequest); ok {
+			keys := make([]string, len(params.Requests))
+			blocks := make([]*types.BlockData, len(params.Requests))
+
+			for i, r := range params.Requests {
+				keys[i] = r.Key
+				blocks[i] = &types.BlockData{
+					Primary:  r.Block.Primary,
+					Vector:   r.Block.Vector,
+					Keywords: r.Block.Keywords,
+				}
+			}
+
+			// Call BatchAppendBlocks
+			_, err := tm.Storage.BatchAppendBlocks(params.Collection, keys, blocks)
+			if err != nil {
+				resp.Success = false
+				resp.Error = err
+			} else {
+				resp.Success = true
+				// TODO: Return list of successes?
+			}
+		}
+
 	case types.OpGetBlock:
 		if params, ok := req.Params.(*pb.GetBlockRequest); ok {
 			block, err := tm.Storage.GetBlock(params.Collection, params.Key, params.Index)

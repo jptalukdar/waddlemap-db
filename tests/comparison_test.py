@@ -138,15 +138,30 @@ def main():
     # WaddleDB Ingestion
     print("  Ingesting into WaddleDB...")
     start_w = time.time()
+    
+    # Use Batch Append
+    w_batch_size = 100
+    w_items = []
+    
     for item in prepared_data:
         key = f"doc_{item['doc_id']}"
-        w_client.append_block(
-            collection=WADDLE_COL,
-            key=key,
-            primary=item['text'],
-            vector=item['vector'],
-            keywords=[key]
-        )
+        w_items.append({
+            'key': key,
+            'primary': item['text'],
+            'vector': item['vector'],
+            'keywords': [key]
+        })
+        
+        if len(w_items) >= w_batch_size:
+            try:
+                w_client.batch_append_blocks(WADDLE_COL, w_items)
+            except Exception as e:
+                print(f"Batch Error: {e}")
+            w_items = []
+
+    if w_items:
+        w_client.batch_append_blocks(WADDLE_COL, w_items)
+        
     w_ingest_time = time.time() - start_w
     print(f"  WaddleDB Ingestion: {w_ingest_time:.4f}s ({len(prepared_data)/w_ingest_time:.1f} chunks/s)")
     

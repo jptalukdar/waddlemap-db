@@ -292,6 +292,7 @@ Indexes are derived and rebuildable from the primary data.
 *   `AppendBlock(collection string, key string, data BlockData)` | Appends a new block to the Key array.
 *   `UpdateBlock(collection string, key string, index int, data BlockData)` | Updates a specific block within a Key array. If the data doesn't exceed the present block size, run UpdateBlock. Otherwise, run ReplaceBlock.
 *   `ReplaceBlock(collection string, key string, index int, data BlockData)` | Replaces a specific block within a Key array. Block will contain the previous index. This will delete the previous block and create a new one.
+*   `BatchAppendBlock(collection string, reqs []AppendBlockRequest) -> []bool` | Appends multiple blocks in a single request. Returns success status for each.
 
 #### Search Operations
 *   `Search(collection string, query []float32, top_k int, mode string, keywords []string) -> ResultList` | Performs a semantic search across all blocks in the collection filtered by keywords if any. Blank is global.

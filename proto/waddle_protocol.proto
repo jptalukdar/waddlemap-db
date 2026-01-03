@@ -31,6 +31,7 @@ message WaddleRequest {
     SearchInKeyRequest search_in_key = 29;
     KeywordSearchRequest keyword_search = 30;
     SnapshotCollectionRequest snapshot_col = 31;
+    BatchAppendBlockRequest batch_append = 32;
     // ... other block ops ...
   }
 }
@@ -94,6 +95,11 @@ message AppendBlockRequest {
   string collection = 1;
   string key = 2;
   BlockData block = 3;
+}
+
+message BatchAppendBlockRequest {
+  string collection = 1;
+  repeated AppendBlockRequest requests = 2; // Collection in requests is redundant but okay, or we can use a simpler struct
 }
 
 message GetBlockRequest {

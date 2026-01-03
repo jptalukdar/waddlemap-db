@@ -182,6 +182,106 @@ func (m *Manager) Append(key string, payload []byte) error {
 	return nil
 }
 
+// BatchAppend adds multiple entries to the storage.
+// It groups entries by bucket to minimize lock contention and file seeks.
+func (m *Manager) BatchAppend(entries map[string][]byte) error {
+	// 1. Group by Bucket to batch writes
+	grouped := make(map[uint32][]struct {
+		Key     string
+		Payload []byte
+	})
+
+	for k, v := range entries {
+		bid := m.getBucketID(k)
+		grouped[bid] = append(grouped[bid], struct {
+			Key     string
+			Payload []byte
+		}{k, v})
+	}
+
+	// 2. Process each bucket concurrently or sequentially
+	// Using concurrency for speed
+	var mu sync.Mutex
+	var errs []string
+	var wg sync.WaitGroup
+
+	for bid, items := range grouped {
+		wg.Add(1)
+		go func(bucketID uint32, items []struct {
+			Key     string
+			Payload []byte
+		}) {
+			defer wg.Done()
+			bucket := m.Buckets[bucketID]
+
+			bucket.WriteLock.Lock()
+			defer bucket.WriteLock.Unlock()
+
+			// Seek once to end
+			offset, err := bucket.File.Seek(0, 2)
+			if err != nil {
+				mu.Lock()
+				errs = append(errs, fmt.Sprintf("bucket %d seek: %v", bucketID, err))
+				mu.Unlock()
+				return
+			}
+
+			// Prepare Index updates
+			newIndexEntries := make(map[string]int64)
+
+			// Buffer writes? Or write individually?
+			// Writing individually to file is okay if OS buffers, but we can buffer in memory.
+			// Let's write individually for simplicity but under one lock.
+
+			for _, item := range items {
+				// START Format logic from Append()
+				buf := new(bytes.Buffer)
+				if err := binary.Write(buf, binary.BigEndian, int32(len(item.Key))); err != nil {
+					// handle error
+					continue
+				}
+				buf.Write([]byte(item.Key))
+
+				compressedPayload := CompressBytes(item.Payload)
+				if err := binary.Write(buf, binary.BigEndian, uint32(len(compressedPayload))); err != nil {
+					continue
+				}
+				buf.Write(compressedPayload)
+
+				n, err := bucket.File.Write(buf.Bytes())
+				if err != nil {
+					mu.Lock()
+					errs = append(errs, fmt.Sprintf("bucket %d write key %s: %v", bucketID, item.Key, err))
+					mu.Unlock()
+					return // Stop usage of this bucket on error
+				}
+				// END Format
+
+				newIndexEntries[item.Key] = offset
+				offset += int64(n)
+			}
+
+			if m.Config.SyncMode == "strict" {
+				bucket.File.Sync()
+			}
+
+			// Update Index in batch
+			bucket.IndexLock.Lock()
+			for k, off := range newIndexEntries {
+				bucket.Index[k] = append(bucket.Index[k], off)
+			}
+			bucket.IndexLock.Unlock()
+
+		}(bid, items)
+	}
+	wg.Wait()
+
+	if len(errs) > 0 {
+		return fmt.Errorf("batch append errors: %s", strings.Join(errs, "; "))
+	}
+	return nil
+}
+
 func (m *Manager) Get(key string, index int) ([]byte, error) {
 	bucket := m.Buckets[m.getBucketID(key)]
 

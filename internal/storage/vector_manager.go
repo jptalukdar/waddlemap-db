@@ -153,6 +153,71 @@ func (vm *VectorManager) AppendBlock(collection, key string, block *types.BlockD
 	return index, nil
 }
 
+// BatchAppendBlocks appends multiple blocks effectively.
+func (vm *VectorManager) BatchAppendBlocks(collection string, keys []string, blocks []*types.BlockData) ([]bool, error) {
+	coll, err := vm.collections.GetCollection(collection)
+	if err != nil {
+		return nil, err
+	}
+
+	successes := make([]bool, len(keys))
+	batchEntries := make(map[string][]byte)
+
+	// Phase 1: In-Memory updates & preparation
+	for i, key := range keys {
+		block := blocks[i]
+
+		// WAL (Individual for now, TODO: BatchWAL)
+		if err := vm.wal.LogAdd(collection, key, 0, block.Vector, block.Keywords, []byte(block.Primary)); err != nil {
+			// Log error but continue? Or fail all?
+			// If WAL fails, we shouldn't proceed for this item.
+			continue
+		}
+
+		index, err := coll.AppendBlock(key, block)
+		if err != nil {
+			continue
+		}
+
+		vectorID, err := coll.GetBlockVectorID(key, index)
+		if err != nil {
+			continue
+		}
+
+		// Serialize Entry
+		entry := &Entry{
+			Key:           []byte(key),
+			Keywords:      block.Keywords,
+			PrimaryData:   []byte(block.Primary),
+			SecondaryData: VectorIDToBytes(vectorID),
+			Flags:         types.EntryFlags{},
+		}
+		if len(block.Vector) > 0 {
+			entry.Flags.DataType = types.DataTypeVector
+		}
+
+		encoded, err := EncodeEntry(entry)
+		if err != nil {
+			continue
+		}
+
+		batchEntries[key] = encoded
+		successes[i] = true
+	}
+
+	// Phase 2: Batch Storage Write
+	if len(batchEntries) > 0 {
+		if err := vm.Manager.BatchAppend(batchEntries); err != nil {
+			// If storage fails, technically we are in inconsistent state (memory has it, disk doesn't).
+			// Robustness would require rollback or repair.
+			// For this implementation, we return error.
+			return successes, fmt.Errorf("batch storage write failed: %w", err)
+		}
+	}
+
+	return successes, nil
+}
+
 // GetBlock retrieves a specific block.
 func (vm *VectorManager) GetBlock(collection, key string, index uint32) (*types.BlockData, error) {
 	coll, err := vm.collections.GetCollection(collection)

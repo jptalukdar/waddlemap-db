@@ -144,6 +144,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 		case *pb.WaddleRequest_SnapshotCol:
 			ctx.Operation = types.OpSnapshotCollection
 			ctx.Params = op.SnapshotCol
+		case *pb.WaddleRequest_BatchAppend:
+			ctx.Operation = types.OpBatchAppendBlock
+			ctx.Params = op.BatchAppend
 		default:
 			log.Printf("Unknown operation: %T\n", reqPb.Operation)
 			continue

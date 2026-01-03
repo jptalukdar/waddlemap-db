@@ -91,6 +91,31 @@ class WaddleClient:
         
         return self._send_request(req)
 
+    def batch_append_blocks(self, collection, items):
+        """
+        items: list of dicts: {'key': str, 'primary': str, 'vector': list, 'keywords': list}
+        """
+        req = pb.WaddleRequest()
+        req.request_id = self._get_id()
+        
+        req.batch_append.collection = collection
+        
+        for item in items:
+            append_req = req.batch_append.requests.add()
+            append_req.collection = collection
+            append_req.key = item['key']
+            
+            block = pb.BlockData()
+            block.primary = item['primary']
+            if item.get('vector'):
+                block.vector.extend(item['vector'])
+            if item.get('keywords'):
+                block.keywords.extend(item['keywords'])
+            
+            append_req.block.CopyFrom(block)
+            
+        return self._send_request(req)
+
     def get_block(self, collection, key, index):
         req = pb.WaddleRequest()
         req.request_id = self._get_id()
