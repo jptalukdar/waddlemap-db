@@ -4,17 +4,26 @@ package types
 type ProtocolMethod int
 
 const (
-	OpCheckKey ProtocolMethod = iota
-	OpGetValue
-	OpGetLength
-	OpGetLast
-	OpAddValue
-	OpUpdateValue
-	OpSearchGlobal
-	OpSearchKey
-	OpSnapshot
-	OpGetKeys
-	OpGetValueList
+	OpCreateCollection ProtocolMethod = iota
+	OpDeleteCollection
+	OpListCollections
+	OpCompactCollection
+	OpAppendBlock
+	OpGetBlock
+	OpGetVector
+	OpGetKeyLength
+	OpGetKey
+	OpDeleteKey
+	OpListKeys
+	OpContainsKey
+	OpUpdateBlock
+	OpReplaceBlock
+	OpSearch
+	OpSearchMLT
+	OpSearchInKey
+	OpKeywordSearch
+	OpSnapshotCollection
+	OpBatchAppendBlock
 )
 
 // DBSchemaConfig holds database configuration.

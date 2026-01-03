@@ -1,0 +1,45 @@
+Loading data...
+Loaded 20 documents.
+Loaded 40 single-passage questions.
+Loaded 40 multi-passage questions.
+Loaded 40 no-answer questions.
+
+Initializing WaddleDB Client...
+
+Loading Model...
+
+--- Starting Ingestion ---
+Ingestion complete in 7.59s.
+Total Chunks: 552
+Chunks/Sec: 72.75
+
+--- Running Scenario: Single Passage ---
+  Results for Single Passage:
+  Total Queries: 40
+  Recall@5: 92.50%
+  Avg Latency: 8.10 ms
+  P95 Latency: 10.35 ms
+  Avg Top-1 Distance: 1.0936
+
+--- Running Scenario: Multi Passage ---
+  Results for Multi Passage:
+  Total Queries: 40
+  Recall@5: 85.00%
+  Avg Latency: 8.18 ms
+  P95 Latency: 11.18 ms
+  Avg Top-1 Distance: 1.1156
+
+--- Running Scenario: No Answer ---
+  Results for No Answer:
+  Total Queries: 40
+  Recall@5: 77.50%
+  Avg Latency: 8.68 ms
+  P95 Latency: 11.72 ms
+  Avg Top-1 Distance: 1.1213
+
+--- Final Summary ---
+Scenario        | Avg Lat (ms) | P95 Lat (ms) | Recall@5   | Avg Dist  
+----------------------------------------------------------------------
+Single Passage  | 8.10         | 10.35        | 92.50%     | 1.0936    
+Multi Passage   | 8.18         | 11.18        | 85.00%     | 1.1156    
+No Answer       | 8.68         | 11.72        | 77.50%     | 1.1213    

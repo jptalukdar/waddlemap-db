@@ -11,17 +11,28 @@ service WaddleService {
 message WaddleRequest {
   string request_id = 1;
   oneof operation {
-    CheckKeyRequest check_key = 2;          // 1. check_key(key)
-    GetValueByIndexRequest get_val = 3;     // 2. get_value_by_index(key, index)
-    GetLengthRequest get_len = 4;           // 3. get_length(key)
-    GetLastValueRequest get_last = 5;       // 4. get_last_value(key)
-    AddValueRequest add_val = 6;            // 5. add_value(key, value)
-    SearchGlobalRequest search_global = 8;  // 6. search_global(search_param)
-    SearchOnKeyRequest search_key = 9;      // 7. search_on_key(key, value)
-    SnapshotRequest snapshot = 10;          // 8. snapshot()
-    UpdateValueRequest update_val = 7;      // 9. update_value(key, index, value)
-    GetKeysRequest get_keys = 11;           // 10. get_keys()
-    GetValueListRequest get_val_list = 12;  // 11. get_value_list(key)
+    // Block-Based Vector Ops
+    CreateCollectionRequest create_col = 13;
+    DeleteCollectionRequest delete_col = 14;
+    ListCollectionsRequest list_cols = 15;
+    CompactCollectionRequest compact_col = 16;
+    AppendBlockRequest append_block = 17;
+    GetBlockRequest get_block = 18;
+    GetVectorRequest get_vector = 19;
+    GetKeyLengthRequest get_key_len = 20;
+    GetKeyRequest get_key = 21;
+    DeleteKeyRequest delete_key = 22;
+    ListKeysRequest list_keys = 23;
+    ContainsKeyRequest contains_key = 24;
+    UpdateBlockRequest update_block = 25;
+    ReplaceBlockRequest replace_block = 26;
+    SearchRequest search = 27;
+    SearchMoreLikeThisRequest search_mlt = 28;
+    SearchInKeyRequest search_in_key = 29;
+    KeywordSearchRequest keyword_search = 30;
+    SnapshotCollectionRequest snapshot_col = 31;
+    BatchAppendBlockRequest batch_append = 32;
+    // ... other block ops ...
   }
 }
 
@@ -30,60 +41,157 @@ message WaddleResponse {
   bool success = 2;
   string error_message = 3;
   oneof result {
-    DataItem item = 4;
     uint64 length = 5;
-    SearchResult search_results = 6;
     KeyList key_list = 7;
-    ValueList value_list = 8;
+    
+    // Block Results
+    CollectionList col_list = 9;
+    SearchResultList search_list = 10;
+    BlockData block = 11;
+    BlockList block_list = 12;
   }
 }
 
-message DataItem {
-  uint64 id = 1;
-  int64 timestamp = 2;
-  bytes payload = 3;
-}
+// --- Messages Removed ---
+// CheckKeyRequest, GetVal, etc removed.
 
-// --- Operation Messages ---
-
-message CheckKeyRequest { string key = 1; }
-
-message GetValueByIndexRequest { 
-  string key = 1; 
-  uint64 index = 2; 
-}
-
-message GetLengthRequest { string key = 1; }
-message GetLastValueRequest { string key = 1; }
-
-message AddValueRequest {
-  string key = 1;
-  DataItem item = 2;
-}
-
-message UpdateValueRequest {
-  string key = 1;
-  uint64 index = 2;
-  DataItem item = 3;
-}
-
-message SearchGlobalRequest {
-  bytes pattern = 1; 
-}
-
-message SearchOnKeyRequest {
-  string key = 1;
-  bytes pattern = 2;
-}
-
-message SnapshotRequest { string snapshot_name = 1; }
-
-message SearchResult {
-  repeated DataItem items = 1;
-}
-
-message GetKeysRequest {}
 message KeyList { repeated string keys = 1; }
 
-message GetValueListRequest { string key = 1; }
-message ValueList { repeated DataItem items = 1; }
+
+// --- Block-Based Vector Store Operations ---
+
+// Collection Ops
+message CreateCollectionRequest {
+  string name = 1;
+  uint32 dimensions = 2;
+  string metric = 3;
+}
+message DeleteCollectionRequest { string name = 1; }
+message ListCollectionsRequest {}
+message CompactCollectionRequest { string name = 1; }
+message SnapshotCollectionRequest { string collection = 1; }
+message Collection {
+  string name = 1;
+  uint32 dimensions = 2;
+  string metric = 3;
+}
+message CollectionList {
+  repeated Collection collections = 1;
+}
+
+message BlockList {
+  repeated BlockData blocks = 1;
+}
+
+// Block Data
+message BlockData {
+  string primary = 1; // Primary text/binary data
+  repeated float vector = 2; // Secondary vector data
+  repeated string keywords = 3; // Keywords
+}
+
+// Block/Key Ops
+message AppendBlockRequest {
+  string collection = 1;
+  string key = 2;
+  BlockData block = 3;
+}
+
+message BatchAppendBlockRequest {
+  string collection = 1;
+  repeated AppendBlockRequest requests = 2; // Collection in requests is redundant but okay, or we can use a simpler struct
+}
+
+message GetBlockRequest {
+  string collection = 1;
+  string key = 2;
+  uint32 index = 3;
+}
+
+message GetVectorRequest {
+  string collection = 1;
+  string key = 2;
+  uint32 index = 3;
+}
+
+message GetKeyLengthRequest {
+  string collection = 1;
+  string key = 2;
+}
+
+message GetKeyRequest {
+  string collection = 1;
+  string key = 2;
+}
+
+message DeleteKeyRequest {
+  string collection = 1;
+  string key = 2;
+}
+
+message ListKeysRequest {
+  string collection = 1;
+}
+
+message ContainsKeyRequest {
+  string collection = 1;
+  string key = 2;
+}
+
+message UpdateBlockRequest {
+  string collection = 1;
+  string key = 2;
+  uint32 index = 3;
+  BlockData block = 4;
+}
+
+message ReplaceBlockRequest {
+  string collection = 1;
+  string key = 2;
+  uint32 index = 3;
+  BlockData block = 4;
+}
+
+// Search Ops
+message SearchRequest {
+  string collection = 1;
+  repeated float query = 2;
+  uint32 top_k = 3;
+  string mode = 4; // "global" or specific keyword mode? Spec says "mode" (match_mode for keywords, or maybe search mode?)
+  repeated string keywords = 5;
+}
+
+message SearchMoreLikeThisRequest {
+  string collection = 1;
+  string key = 2;
+  uint32 index = 3;
+  uint32 top_k = 4;
+}
+
+message SearchInKeyRequest {
+  string collection = 1;
+  string key = 2;
+  repeated float query = 3;
+  uint32 top_k = 4;
+}
+
+message KeywordSearchRequest {
+  string collection = 1;
+  repeated string keywords = 2;
+  string mode = 3;
+}
+
+// Results
+message SearchResultItem {
+  string key = 1;
+  uint32 index = 2;
+  float distance = 3;
+  BlockData block = 4; // Optional, maybe just Primary
+}
+
+message SearchResultList {
+  repeated SearchResultItem results = 1;
+}
+
+// KeyList defined at line 99
+

@@ -1,0 +1,32 @@
+--- WaddleDB vs ChromaDB Benchmark ---
+Loading Data...
+Loading Model...
+Preparing Chunks & Embeddings (for fair comparison)...
+Prepared 552 chunks in 4.00s.
+
+[WaddleDB] Connecting...
+
+[ChromaDB] Connecting...
+
+[Ingestion Benchmark]
+  Ingesting into WaddleDB...
+  WaddleDB Ingestion: 0.9248s (596.9 chunks/s)
+  Ingesting into ChromaDB...
+  ChromaDB Ingestion: 0.7051s (782.8 chunks/s)
+
+Running Scenario: Single Passage
+
+Running Scenario: Multi Passage
+
+Running Scenario: No Answer
+
+--- Comparative Results ---
+Scenario        | Waddle Lat | Chroma Lat | Waddle Rec | Chroma Rec
+-----------------------------------------------------------------
+Single Passage  | 1.31 ms    | 3.53 ms    | 92.5%     | 90.0%
+Multi Passage   | 1.19 ms    | 2.61 ms    | 85.0%     | 90.0%
+No Answer       | 1.30 ms    | 2.71 ms    | 77.5%     | 70.0%
+
+Ingestion Speed:
+  WaddleDB: 0.92s
+  ChromaDB: 0.71s
