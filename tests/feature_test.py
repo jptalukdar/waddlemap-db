@@ -214,6 +214,62 @@ class SearchTest(BaseTest):
         
         print(f"{bcolors.OKGREEN}    PASS{bcolors.ENDC}")
 
+
+class FileIntegrityTest(BaseTest):
+    def run(self):
+        print(f"{bcolors.HEADER}[Test] File Integrity (Chunking & Retrieval){bcolors.ENDC}")
+        name = "test_integrity"
+        # 1MB file, 64KB chunks
+        total_size = 1024 * 1024
+        chunk_size = 64 * 1024
+        
+        # Create collection
+        # Dims 2, but we mostly care about primary storage here.
+        col = self.ctx.create_collection(name, 2, "l2")
+        
+        # Generate random data
+        self.log(f"Generating {total_size} bytes of random data...")
+        import base64
+        raw_data = os.urandom(total_size)
+        # Encode to string because primary is string
+        # Base64 expansion is ~33%. 1MB -> 1.33MB string.
+        b64_data = base64.b64encode(raw_data).decode('utf-8')
+        
+        # Split into chunks
+        chunks = []
+        for i in range(0, len(b64_data), chunk_size):
+            chunks.append(b64_data[i:i+chunk_size])
+            
+        key = "file_v1"
+        self.log(f"Uploading {len(chunks)} chunks for key '{key}'...")
+        
+        start = time.time()
+        for i, chunk in enumerate(chunks):
+            # We can associate a vector or keyword if we want, but not strictly needed for storage test.
+            # providing dummy vector
+            col.append_block(key, chunk, vector=[0.0, 0.0], keywords=[f"chunk_{i}"])
+            
+        dur = time.time() - start
+        self.log(f"Upload took {dur:.4f}s")
+        
+        self.log("Retrieving and reassembling...")
+        retrieved_b64 = []
+        for i in range(len(chunks)):
+            block = col.get_block(key, i)
+            retrieved_b64.append(block.primary)
+            
+        full_retrieved = "".join(retrieved_b64)
+        
+        self.log("Verifying integrity...")
+        self.assert_equal(len(full_retrieved), len(b64_data), "Total length match")
+        self.assert_equal(full_retrieved, b64_data, "Content match")
+        
+        # Double check decoding
+        decoded = base64.b64decode(full_retrieved)
+        self.assert_equal(decoded, raw_data, "Binary content match")
+        
+        print(f"{bcolors.OKGREEN}    PASS{bcolors.ENDC}")
+
 # --- Runner ---
 
 def main():
@@ -224,6 +280,7 @@ def main():
         BasicOperationsTest(ctx),
         BatchOperationsTest(ctx),
         SearchTest(ctx),
+        FileIntegrityTest(ctx),
     ]
     
     print(f"Starting Feature Test Suite ({len(tests)} tests)...")
