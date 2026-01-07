@@ -443,6 +443,59 @@ func (m *Manager) GetAllValues(key string) ([][]byte, error) {
 	return results, nil
 }
 
+// GetRelativeBlocks retrieves blocks from (centerIndex - before) to (centerIndex + after)
+// relative to a given center index. For example, GetRelativeBlocks(key, 5, 2, 3) retrieves
+// blocks at indices 3, 4, 5, 6, 7, 8 (i.e., -2 to +3 from index 5).
+// The before and after values should be non-negative.
+// Returns an error if the key is not found or if the range is invalid.
+func (m *Manager) GetRelativeBlocks(key string, centerIndex int, before int, after int) ([][]byte, error) {
+	if before < 0 || after < 0 {
+		return nil, fmt.Errorf("before and after must be non-negative")
+	}
+
+	bucket := m.Buckets[m.getBucketID(key)]
+
+	bucket.IndexLock.RLock()
+	offsets, exists := bucket.Index[key]
+	bucket.IndexLock.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("key not found")
+	}
+
+	totalBlocks := len(offsets)
+	if totalBlocks == 0 {
+		return nil, fmt.Errorf("no blocks for key")
+	}
+
+	// Calculate the actual start and end indices
+	startIndex := centerIndex - before
+	endIndex := centerIndex + after
+
+	// Clamp to valid range
+	if startIndex < 0 {
+		startIndex = 0
+	}
+	if endIndex >= totalBlocks {
+		endIndex = totalBlocks - 1
+	}
+
+	// Validate the range
+	if startIndex > endIndex || startIndex >= totalBlocks || centerIndex < 0 || centerIndex >= totalBlocks {
+		return nil, fmt.Errorf("invalid index range: centerIndex=%d, before=%d, after=%d, totalBlocks=%d", centerIndex, before, after, totalBlocks)
+	}
+
+	results := make([][]byte, 0, endIndex-startIndex+1)
+	for i := startIndex; i <= endIndex; i++ {
+		val, err := bucket.readRecordAt(offsets[i])
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, val)
+	}
+	return results, nil
+}
+
 func (m *Manager) Snapshot(name string) error {
 	snapPath := filepath.Join(m.Config.DataPath, "snapshots", name)
 	if err := os.MkdirAll(snapPath, 0755); err != nil {

@@ -401,6 +401,26 @@ func (tm *Manager) handle(req types.RequestContext) {
 			}
 		}
 
+	case types.OpGetRelativeBlocks:
+		if params, ok := req.Params.(*pb.GetRelativeBlocksRequest); ok {
+			blocks, err := tm.Storage.GetRelativeBlocks(params.Collection, params.Key, int(params.CenterIndex), int(params.Before), int(params.After))
+			if err != nil {
+				resp.Success = false
+				resp.Error = err
+			} else {
+				resp.Success = true
+				pbBlocks := &pb.BlockList{}
+				for _, b := range blocks {
+					pbBlocks.Blocks = append(pbBlocks.Blocks, &pb.BlockData{
+						Primary:  b.Primary,
+						Vector:   b.Vector,
+						Keywords: b.Keywords,
+					})
+				}
+				resp.Data = pbBlocks
+			}
+		}
+
 	case types.OpSnapshotCollection:
 		if params, ok := req.Params.(*pb.SnapshotCollectionRequest); ok {
 			_, err := tm.Storage.SnapshotCollection(params.Collection)

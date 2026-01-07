@@ -24,6 +24,7 @@ const (
 	OpKeywordSearch
 	OpSnapshotCollection
 	OpBatchAppendBlock
+	OpGetRelativeBlocks
 )
 
 // DBSchemaConfig holds database configuration.

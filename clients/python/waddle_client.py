@@ -69,6 +69,31 @@ class Collection:
         resp = self.client._send_request(req)
         return resp.block
 
+    def get_relative_blocks(self, key, center_index, before=0, after=0):
+        """
+        Get blocks from (center_index - before) to (center_index + after).
+
+        Args:
+            key: Key to search
+            center_index: The center index
+            before: Number of blocks to fetch before the center
+            after: Number of blocks to fetch after the center
+
+        Returns:
+            List of BlockData objects
+        """
+        req = pb.WaddleRequest()
+        req.request_id = self.client._get_id()
+        req.get_relative_blocks.collection = self.name
+        req.get_relative_blocks.key = key
+        req.get_relative_blocks.center_index = center_index
+        req.get_relative_blocks.before = before
+        req.get_relative_blocks.after = after
+
+        resp = self.client._send_request(req)
+        return resp.block_list.blocks
+
+
     def delete_key(self, key):
         """Delete a key and all its blocks from this collection."""
         req = pb.WaddleRequest()

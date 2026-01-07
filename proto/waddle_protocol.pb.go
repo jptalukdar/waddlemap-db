@@ -46,6 +46,7 @@ type WaddleRequest struct {
 	//	*WaddleRequest_KeywordSearch
 	//	*WaddleRequest_SnapshotCol
 	//	*WaddleRequest_BatchAppend
+	//	*WaddleRequest_GetRelativeBlocks
 	Operation     isWaddleRequest_Operation `protobuf_oneof:"operation"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -275,6 +276,15 @@ func (x *WaddleRequest) GetBatchAppend() *BatchAppendBlockRequest {
 	return nil
 }
 
+func (x *WaddleRequest) GetGetRelativeBlocks() *GetRelativeBlocksRequest {
+	if x != nil {
+		if x, ok := x.Operation.(*WaddleRequest_GetRelativeBlocks); ok {
+			return x.GetRelativeBlocks
+		}
+	}
+	return nil
+}
+
 type isWaddleRequest_Operation interface {
 	isWaddleRequest_Operation()
 }
@@ -357,7 +367,11 @@ type WaddleRequest_SnapshotCol struct {
 }
 
 type WaddleRequest_BatchAppend struct {
-	BatchAppend *BatchAppendBlockRequest `protobuf:"bytes,32,opt,name=batch_append,json=batchAppend,proto3,oneof"` // ... other block ops ...
+	BatchAppend *BatchAppendBlockRequest `protobuf:"bytes,32,opt,name=batch_append,json=batchAppend,proto3,oneof"`
+}
+
+type WaddleRequest_GetRelativeBlocks struct {
+	GetRelativeBlocks *GetRelativeBlocksRequest `protobuf:"bytes,33,opt,name=get_relative_blocks,json=getRelativeBlocks,proto3,oneof"`
 }
 
 func (*WaddleRequest_CreateCol) isWaddleRequest_Operation() {}
@@ -399,6 +413,8 @@ func (*WaddleRequest_KeywordSearch) isWaddleRequest_Operation() {}
 func (*WaddleRequest_SnapshotCol) isWaddleRequest_Operation() {}
 
 func (*WaddleRequest_BatchAppend) isWaddleRequest_Operation() {}
+
+func (*WaddleRequest_GetRelativeBlocks) isWaddleRequest_Operation() {}
 
 type WaddleResponse struct {
 	state        protoimpl.MessageState `protogen:"open.v1"`
@@ -1338,6 +1354,82 @@ func (x *GetKeyLengthRequest) GetKey() string {
 	return ""
 }
 
+type GetRelativeBlocksRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Collection    string                 `protobuf:"bytes,1,opt,name=collection,proto3" json:"collection,omitempty"`
+	Key           string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	CenterIndex   uint32                 `protobuf:"varint,3,opt,name=center_index,json=centerIndex,proto3" json:"center_index,omitempty"`
+	Before        uint32                 `protobuf:"varint,4,opt,name=before,proto3" json:"before,omitempty"`
+	After         uint32                 `protobuf:"varint,5,opt,name=after,proto3" json:"after,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRelativeBlocksRequest) Reset() {
+	*x = GetRelativeBlocksRequest{}
+	mi := &file_proto_waddle_protocol_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRelativeBlocksRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRelativeBlocksRequest) ProtoMessage() {}
+
+func (x *GetRelativeBlocksRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_waddle_protocol_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRelativeBlocksRequest.ProtoReflect.Descriptor instead.
+func (*GetRelativeBlocksRequest) Descriptor() ([]byte, []int) {
+	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *GetRelativeBlocksRequest) GetCollection() string {
+	if x != nil {
+		return x.Collection
+	}
+	return ""
+}
+
+func (x *GetRelativeBlocksRequest) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *GetRelativeBlocksRequest) GetCenterIndex() uint32 {
+	if x != nil {
+		return x.CenterIndex
+	}
+	return 0
+}
+
+func (x *GetRelativeBlocksRequest) GetBefore() uint32 {
+	if x != nil {
+		return x.Before
+	}
+	return 0
+}
+
+func (x *GetRelativeBlocksRequest) GetAfter() uint32 {
+	if x != nil {
+		return x.After
+	}
+	return 0
+}
+
 type GetKeyRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Collection    string                 `protobuf:"bytes,1,opt,name=collection,proto3" json:"collection,omitempty"`
@@ -1348,7 +1440,7 @@ type GetKeyRequest struct {
 
 func (x *GetKeyRequest) Reset() {
 	*x = GetKeyRequest{}
-	mi := &file_proto_waddle_protocol_proto_msgTypes[17]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1360,7 +1452,7 @@ func (x *GetKeyRequest) String() string {
 func (*GetKeyRequest) ProtoMessage() {}
 
 func (x *GetKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_waddle_protocol_proto_msgTypes[17]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1373,7 +1465,7 @@ func (x *GetKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetKeyRequest.ProtoReflect.Descriptor instead.
 func (*GetKeyRequest) Descriptor() ([]byte, []int) {
-	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{17}
+	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GetKeyRequest) GetCollection() string {
@@ -1400,7 +1492,7 @@ type DeleteKeyRequest struct {
 
 func (x *DeleteKeyRequest) Reset() {
 	*x = DeleteKeyRequest{}
-	mi := &file_proto_waddle_protocol_proto_msgTypes[18]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1412,7 +1504,7 @@ func (x *DeleteKeyRequest) String() string {
 func (*DeleteKeyRequest) ProtoMessage() {}
 
 func (x *DeleteKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_waddle_protocol_proto_msgTypes[18]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1425,7 +1517,7 @@ func (x *DeleteKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteKeyRequest.ProtoReflect.Descriptor instead.
 func (*DeleteKeyRequest) Descriptor() ([]byte, []int) {
-	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{18}
+	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *DeleteKeyRequest) GetCollection() string {
@@ -1451,7 +1543,7 @@ type ListKeysRequest struct {
 
 func (x *ListKeysRequest) Reset() {
 	*x = ListKeysRequest{}
-	mi := &file_proto_waddle_protocol_proto_msgTypes[19]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1463,7 +1555,7 @@ func (x *ListKeysRequest) String() string {
 func (*ListKeysRequest) ProtoMessage() {}
 
 func (x *ListKeysRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_waddle_protocol_proto_msgTypes[19]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1476,7 +1568,7 @@ func (x *ListKeysRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListKeysRequest.ProtoReflect.Descriptor instead.
 func (*ListKeysRequest) Descriptor() ([]byte, []int) {
-	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{19}
+	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ListKeysRequest) GetCollection() string {
@@ -1496,7 +1588,7 @@ type ContainsKeyRequest struct {
 
 func (x *ContainsKeyRequest) Reset() {
 	*x = ContainsKeyRequest{}
-	mi := &file_proto_waddle_protocol_proto_msgTypes[20]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1508,7 +1600,7 @@ func (x *ContainsKeyRequest) String() string {
 func (*ContainsKeyRequest) ProtoMessage() {}
 
 func (x *ContainsKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_waddle_protocol_proto_msgTypes[20]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1521,7 +1613,7 @@ func (x *ContainsKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContainsKeyRequest.ProtoReflect.Descriptor instead.
 func (*ContainsKeyRequest) Descriptor() ([]byte, []int) {
-	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{20}
+	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ContainsKeyRequest) GetCollection() string {
@@ -1550,7 +1642,7 @@ type UpdateBlockRequest struct {
 
 func (x *UpdateBlockRequest) Reset() {
 	*x = UpdateBlockRequest{}
-	mi := &file_proto_waddle_protocol_proto_msgTypes[21]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1562,7 +1654,7 @@ func (x *UpdateBlockRequest) String() string {
 func (*UpdateBlockRequest) ProtoMessage() {}
 
 func (x *UpdateBlockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_waddle_protocol_proto_msgTypes[21]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1575,7 +1667,7 @@ func (x *UpdateBlockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateBlockRequest.ProtoReflect.Descriptor instead.
 func (*UpdateBlockRequest) Descriptor() ([]byte, []int) {
-	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{21}
+	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *UpdateBlockRequest) GetCollection() string {
@@ -1618,7 +1710,7 @@ type ReplaceBlockRequest struct {
 
 func (x *ReplaceBlockRequest) Reset() {
 	*x = ReplaceBlockRequest{}
-	mi := &file_proto_waddle_protocol_proto_msgTypes[22]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1630,7 +1722,7 @@ func (x *ReplaceBlockRequest) String() string {
 func (*ReplaceBlockRequest) ProtoMessage() {}
 
 func (x *ReplaceBlockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_waddle_protocol_proto_msgTypes[22]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1643,7 +1735,7 @@ func (x *ReplaceBlockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplaceBlockRequest.ProtoReflect.Descriptor instead.
 func (*ReplaceBlockRequest) Descriptor() ([]byte, []int) {
-	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{22}
+	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ReplaceBlockRequest) GetCollection() string {
@@ -1688,7 +1780,7 @@ type SearchRequest struct {
 
 func (x *SearchRequest) Reset() {
 	*x = SearchRequest{}
-	mi := &file_proto_waddle_protocol_proto_msgTypes[23]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1700,7 +1792,7 @@ func (x *SearchRequest) String() string {
 func (*SearchRequest) ProtoMessage() {}
 
 func (x *SearchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_waddle_protocol_proto_msgTypes[23]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1713,7 +1805,7 @@ func (x *SearchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchRequest.ProtoReflect.Descriptor instead.
 func (*SearchRequest) Descriptor() ([]byte, []int) {
-	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{23}
+	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *SearchRequest) GetCollection() string {
@@ -1763,7 +1855,7 @@ type SearchMoreLikeThisRequest struct {
 
 func (x *SearchMoreLikeThisRequest) Reset() {
 	*x = SearchMoreLikeThisRequest{}
-	mi := &file_proto_waddle_protocol_proto_msgTypes[24]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1775,7 +1867,7 @@ func (x *SearchMoreLikeThisRequest) String() string {
 func (*SearchMoreLikeThisRequest) ProtoMessage() {}
 
 func (x *SearchMoreLikeThisRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_waddle_protocol_proto_msgTypes[24]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1788,7 +1880,7 @@ func (x *SearchMoreLikeThisRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchMoreLikeThisRequest.ProtoReflect.Descriptor instead.
 func (*SearchMoreLikeThisRequest) Descriptor() ([]byte, []int) {
-	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{24}
+	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *SearchMoreLikeThisRequest) GetCollection() string {
@@ -1831,7 +1923,7 @@ type SearchInKeyRequest struct {
 
 func (x *SearchInKeyRequest) Reset() {
 	*x = SearchInKeyRequest{}
-	mi := &file_proto_waddle_protocol_proto_msgTypes[25]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1843,7 +1935,7 @@ func (x *SearchInKeyRequest) String() string {
 func (*SearchInKeyRequest) ProtoMessage() {}
 
 func (x *SearchInKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_waddle_protocol_proto_msgTypes[25]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1856,7 +1948,7 @@ func (x *SearchInKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchInKeyRequest.ProtoReflect.Descriptor instead.
 func (*SearchInKeyRequest) Descriptor() ([]byte, []int) {
-	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{25}
+	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *SearchInKeyRequest) GetCollection() string {
@@ -1898,7 +1990,7 @@ type KeywordSearchRequest struct {
 
 func (x *KeywordSearchRequest) Reset() {
 	*x = KeywordSearchRequest{}
-	mi := &file_proto_waddle_protocol_proto_msgTypes[26]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1910,7 +2002,7 @@ func (x *KeywordSearchRequest) String() string {
 func (*KeywordSearchRequest) ProtoMessage() {}
 
 func (x *KeywordSearchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_waddle_protocol_proto_msgTypes[26]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1923,7 +2015,7 @@ func (x *KeywordSearchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KeywordSearchRequest.ProtoReflect.Descriptor instead.
 func (*KeywordSearchRequest) Descriptor() ([]byte, []int) {
-	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{26}
+	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *KeywordSearchRequest) GetCollection() string {
@@ -1960,7 +2052,7 @@ type SearchResultItem struct {
 
 func (x *SearchResultItem) Reset() {
 	*x = SearchResultItem{}
-	mi := &file_proto_waddle_protocol_proto_msgTypes[27]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1972,7 +2064,7 @@ func (x *SearchResultItem) String() string {
 func (*SearchResultItem) ProtoMessage() {}
 
 func (x *SearchResultItem) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_waddle_protocol_proto_msgTypes[27]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1985,7 +2077,7 @@ func (x *SearchResultItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchResultItem.ProtoReflect.Descriptor instead.
 func (*SearchResultItem) Descriptor() ([]byte, []int) {
-	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{27}
+	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *SearchResultItem) GetKey() string {
@@ -2025,7 +2117,7 @@ type SearchResultList struct {
 
 func (x *SearchResultList) Reset() {
 	*x = SearchResultList{}
-	mi := &file_proto_waddle_protocol_proto_msgTypes[28]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2037,7 +2129,7 @@ func (x *SearchResultList) String() string {
 func (*SearchResultList) ProtoMessage() {}
 
 func (x *SearchResultList) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_waddle_protocol_proto_msgTypes[28]
+	mi := &file_proto_waddle_protocol_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2050,7 +2142,7 @@ func (x *SearchResultList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchResultList.ProtoReflect.Descriptor instead.
 func (*SearchResultList) Descriptor() ([]byte, []int) {
-	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{28}
+	return file_proto_waddle_protocol_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *SearchResultList) GetResults() []*SearchResultItem {
@@ -2064,8 +2156,7 @@ var File_proto_waddle_protocol_proto protoreflect.FileDescriptor
 
 const file_proto_waddle_protocol_proto_rawDesc = "" +
 	"\n" +
-	"\x1bproto/waddle_protocol.proto\x12\twaddlemap\"\xe9\n" +
-	"\n" +
+	"\x1bproto/waddle_protocol.proto\x12\twaddlemap\"\xc0\v\n" +
 	"\rWaddleRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12C\n" +
@@ -2094,7 +2185,8 @@ const file_proto_waddle_protocol_proto_rawDesc = "" +
 	"\rsearch_in_key\x18\x1d \x01(\v2\x1d.waddlemap.SearchInKeyRequestH\x00R\vsearchInKey\x12H\n" +
 	"\x0ekeyword_search\x18\x1e \x01(\v2\x1f.waddlemap.KeywordSearchRequestH\x00R\rkeywordSearch\x12I\n" +
 	"\fsnapshot_col\x18\x1f \x01(\v2$.waddlemap.SnapshotCollectionRequestH\x00R\vsnapshotCol\x12G\n" +
-	"\fbatch_append\x18  \x01(\v2\".waddlemap.BatchAppendBlockRequestH\x00R\vbatchAppendB\v\n" +
+	"\fbatch_append\x18  \x01(\v2\".waddlemap.BatchAppendBlockRequestH\x00R\vbatchAppend\x12U\n" +
+	"\x13get_relative_blocks\x18! \x01(\v2#.waddlemap.GetRelativeBlocksRequestH\x00R\x11getRelativeBlocksB\v\n" +
 	"\toperation\"\xa0\x03\n" +
 	"\x0eWaddleResponse\x12\x1d\n" +
 	"\n" +
@@ -2170,7 +2262,15 @@ const file_proto_waddle_protocol_proto_rawDesc = "" +
 	"\n" +
 	"collection\x18\x01 \x01(\tR\n" +
 	"collection\x12\x10\n" +
-	"\x03key\x18\x02 \x01(\tR\x03key\"A\n" +
+	"\x03key\x18\x02 \x01(\tR\x03key\"\x9d\x01\n" +
+	"\x18GetRelativeBlocksRequest\x12\x1e\n" +
+	"\n" +
+	"collection\x18\x01 \x01(\tR\n" +
+	"collection\x12\x10\n" +
+	"\x03key\x18\x02 \x01(\tR\x03key\x12!\n" +
+	"\fcenter_index\x18\x03 \x01(\rR\vcenterIndex\x12\x16\n" +
+	"\x06before\x18\x04 \x01(\rR\x06before\x12\x14\n" +
+	"\x05after\x18\x05 \x01(\rR\x05after\"A\n" +
 	"\rGetKeyRequest\x12\x1e\n" +
 	"\n" +
 	"collection\x18\x01 \x01(\tR\n" +
@@ -2254,7 +2354,7 @@ func file_proto_waddle_protocol_proto_rawDescGZIP() []byte {
 	return file_proto_waddle_protocol_proto_rawDescData
 }
 
-var file_proto_waddle_protocol_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
+var file_proto_waddle_protocol_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_proto_waddle_protocol_proto_goTypes = []any{
 	(*WaddleRequest)(nil),             // 0: waddlemap.WaddleRequest
 	(*WaddleResponse)(nil),            // 1: waddlemap.WaddleResponse
@@ -2273,18 +2373,19 @@ var file_proto_waddle_protocol_proto_goTypes = []any{
 	(*GetBlockRequest)(nil),           // 14: waddlemap.GetBlockRequest
 	(*GetVectorRequest)(nil),          // 15: waddlemap.GetVectorRequest
 	(*GetKeyLengthRequest)(nil),       // 16: waddlemap.GetKeyLengthRequest
-	(*GetKeyRequest)(nil),             // 17: waddlemap.GetKeyRequest
-	(*DeleteKeyRequest)(nil),          // 18: waddlemap.DeleteKeyRequest
-	(*ListKeysRequest)(nil),           // 19: waddlemap.ListKeysRequest
-	(*ContainsKeyRequest)(nil),        // 20: waddlemap.ContainsKeyRequest
-	(*UpdateBlockRequest)(nil),        // 21: waddlemap.UpdateBlockRequest
-	(*ReplaceBlockRequest)(nil),       // 22: waddlemap.ReplaceBlockRequest
-	(*SearchRequest)(nil),             // 23: waddlemap.SearchRequest
-	(*SearchMoreLikeThisRequest)(nil), // 24: waddlemap.SearchMoreLikeThisRequest
-	(*SearchInKeyRequest)(nil),        // 25: waddlemap.SearchInKeyRequest
-	(*KeywordSearchRequest)(nil),      // 26: waddlemap.KeywordSearchRequest
-	(*SearchResultItem)(nil),          // 27: waddlemap.SearchResultItem
-	(*SearchResultList)(nil),          // 28: waddlemap.SearchResultList
+	(*GetRelativeBlocksRequest)(nil),  // 17: waddlemap.GetRelativeBlocksRequest
+	(*GetKeyRequest)(nil),             // 18: waddlemap.GetKeyRequest
+	(*DeleteKeyRequest)(nil),          // 19: waddlemap.DeleteKeyRequest
+	(*ListKeysRequest)(nil),           // 20: waddlemap.ListKeysRequest
+	(*ContainsKeyRequest)(nil),        // 21: waddlemap.ContainsKeyRequest
+	(*UpdateBlockRequest)(nil),        // 22: waddlemap.UpdateBlockRequest
+	(*ReplaceBlockRequest)(nil),       // 23: waddlemap.ReplaceBlockRequest
+	(*SearchRequest)(nil),             // 24: waddlemap.SearchRequest
+	(*SearchMoreLikeThisRequest)(nil), // 25: waddlemap.SearchMoreLikeThisRequest
+	(*SearchInKeyRequest)(nil),        // 26: waddlemap.SearchInKeyRequest
+	(*KeywordSearchRequest)(nil),      // 27: waddlemap.KeywordSearchRequest
+	(*SearchResultItem)(nil),          // 28: waddlemap.SearchResultItem
+	(*SearchResultList)(nil),          // 29: waddlemap.SearchResultList
 }
 var file_proto_waddle_protocol_proto_depIdxs = []int32{
 	3,  // 0: waddlemap.WaddleRequest.create_col:type_name -> waddlemap.CreateCollectionRequest
@@ -2295,38 +2396,39 @@ var file_proto_waddle_protocol_proto_depIdxs = []int32{
 	14, // 5: waddlemap.WaddleRequest.get_block:type_name -> waddlemap.GetBlockRequest
 	15, // 6: waddlemap.WaddleRequest.get_vector:type_name -> waddlemap.GetVectorRequest
 	16, // 7: waddlemap.WaddleRequest.get_key_len:type_name -> waddlemap.GetKeyLengthRequest
-	17, // 8: waddlemap.WaddleRequest.get_key:type_name -> waddlemap.GetKeyRequest
-	18, // 9: waddlemap.WaddleRequest.delete_key:type_name -> waddlemap.DeleteKeyRequest
-	19, // 10: waddlemap.WaddleRequest.list_keys:type_name -> waddlemap.ListKeysRequest
-	20, // 11: waddlemap.WaddleRequest.contains_key:type_name -> waddlemap.ContainsKeyRequest
-	21, // 12: waddlemap.WaddleRequest.update_block:type_name -> waddlemap.UpdateBlockRequest
-	22, // 13: waddlemap.WaddleRequest.replace_block:type_name -> waddlemap.ReplaceBlockRequest
-	23, // 14: waddlemap.WaddleRequest.search:type_name -> waddlemap.SearchRequest
-	24, // 15: waddlemap.WaddleRequest.search_mlt:type_name -> waddlemap.SearchMoreLikeThisRequest
-	25, // 16: waddlemap.WaddleRequest.search_in_key:type_name -> waddlemap.SearchInKeyRequest
-	26, // 17: waddlemap.WaddleRequest.keyword_search:type_name -> waddlemap.KeywordSearchRequest
+	18, // 8: waddlemap.WaddleRequest.get_key:type_name -> waddlemap.GetKeyRequest
+	19, // 9: waddlemap.WaddleRequest.delete_key:type_name -> waddlemap.DeleteKeyRequest
+	20, // 10: waddlemap.WaddleRequest.list_keys:type_name -> waddlemap.ListKeysRequest
+	21, // 11: waddlemap.WaddleRequest.contains_key:type_name -> waddlemap.ContainsKeyRequest
+	22, // 12: waddlemap.WaddleRequest.update_block:type_name -> waddlemap.UpdateBlockRequest
+	23, // 13: waddlemap.WaddleRequest.replace_block:type_name -> waddlemap.ReplaceBlockRequest
+	24, // 14: waddlemap.WaddleRequest.search:type_name -> waddlemap.SearchRequest
+	25, // 15: waddlemap.WaddleRequest.search_mlt:type_name -> waddlemap.SearchMoreLikeThisRequest
+	26, // 16: waddlemap.WaddleRequest.search_in_key:type_name -> waddlemap.SearchInKeyRequest
+	27, // 17: waddlemap.WaddleRequest.keyword_search:type_name -> waddlemap.KeywordSearchRequest
 	7,  // 18: waddlemap.WaddleRequest.snapshot_col:type_name -> waddlemap.SnapshotCollectionRequest
 	13, // 19: waddlemap.WaddleRequest.batch_append:type_name -> waddlemap.BatchAppendBlockRequest
-	2,  // 20: waddlemap.WaddleResponse.key_list:type_name -> waddlemap.KeyList
-	9,  // 21: waddlemap.WaddleResponse.col_list:type_name -> waddlemap.CollectionList
-	28, // 22: waddlemap.WaddleResponse.search_list:type_name -> waddlemap.SearchResultList
-	11, // 23: waddlemap.WaddleResponse.block:type_name -> waddlemap.BlockData
-	10, // 24: waddlemap.WaddleResponse.block_list:type_name -> waddlemap.BlockList
-	8,  // 25: waddlemap.CollectionList.collections:type_name -> waddlemap.Collection
-	11, // 26: waddlemap.BlockList.blocks:type_name -> waddlemap.BlockData
-	11, // 27: waddlemap.AppendBlockRequest.block:type_name -> waddlemap.BlockData
-	12, // 28: waddlemap.BatchAppendBlockRequest.requests:type_name -> waddlemap.AppendBlockRequest
-	11, // 29: waddlemap.UpdateBlockRequest.block:type_name -> waddlemap.BlockData
-	11, // 30: waddlemap.ReplaceBlockRequest.block:type_name -> waddlemap.BlockData
-	11, // 31: waddlemap.SearchResultItem.block:type_name -> waddlemap.BlockData
-	27, // 32: waddlemap.SearchResultList.results:type_name -> waddlemap.SearchResultItem
-	0,  // 33: waddlemap.WaddleService.Execute:input_type -> waddlemap.WaddleRequest
-	1,  // 34: waddlemap.WaddleService.Execute:output_type -> waddlemap.WaddleResponse
-	34, // [34:35] is the sub-list for method output_type
-	33, // [33:34] is the sub-list for method input_type
-	33, // [33:33] is the sub-list for extension type_name
-	33, // [33:33] is the sub-list for extension extendee
-	0,  // [0:33] is the sub-list for field type_name
+	17, // 20: waddlemap.WaddleRequest.get_relative_blocks:type_name -> waddlemap.GetRelativeBlocksRequest
+	2,  // 21: waddlemap.WaddleResponse.key_list:type_name -> waddlemap.KeyList
+	9,  // 22: waddlemap.WaddleResponse.col_list:type_name -> waddlemap.CollectionList
+	29, // 23: waddlemap.WaddleResponse.search_list:type_name -> waddlemap.SearchResultList
+	11, // 24: waddlemap.WaddleResponse.block:type_name -> waddlemap.BlockData
+	10, // 25: waddlemap.WaddleResponse.block_list:type_name -> waddlemap.BlockList
+	8,  // 26: waddlemap.CollectionList.collections:type_name -> waddlemap.Collection
+	11, // 27: waddlemap.BlockList.blocks:type_name -> waddlemap.BlockData
+	11, // 28: waddlemap.AppendBlockRequest.block:type_name -> waddlemap.BlockData
+	12, // 29: waddlemap.BatchAppendBlockRequest.requests:type_name -> waddlemap.AppendBlockRequest
+	11, // 30: waddlemap.UpdateBlockRequest.block:type_name -> waddlemap.BlockData
+	11, // 31: waddlemap.ReplaceBlockRequest.block:type_name -> waddlemap.BlockData
+	11, // 32: waddlemap.SearchResultItem.block:type_name -> waddlemap.BlockData
+	28, // 33: waddlemap.SearchResultList.results:type_name -> waddlemap.SearchResultItem
+	0,  // 34: waddlemap.WaddleService.Execute:input_type -> waddlemap.WaddleRequest
+	1,  // 35: waddlemap.WaddleService.Execute:output_type -> waddlemap.WaddleResponse
+	35, // [35:36] is the sub-list for method output_type
+	34, // [34:35] is the sub-list for method input_type
+	34, // [34:34] is the sub-list for extension type_name
+	34, // [34:34] is the sub-list for extension extendee
+	0,  // [0:34] is the sub-list for field type_name
 }
 
 func init() { file_proto_waddle_protocol_proto_init() }
@@ -2355,6 +2457,7 @@ func file_proto_waddle_protocol_proto_init() {
 		(*WaddleRequest_KeywordSearch)(nil),
 		(*WaddleRequest_SnapshotCol)(nil),
 		(*WaddleRequest_BatchAppend)(nil),
+		(*WaddleRequest_GetRelativeBlocks)(nil),
 	}
 	file_proto_waddle_protocol_proto_msgTypes[1].OneofWrappers = []any{
 		(*WaddleResponse_Length)(nil),
@@ -2370,7 +2473,7 @@ func file_proto_waddle_protocol_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_waddle_protocol_proto_rawDesc), len(file_proto_waddle_protocol_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   29,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

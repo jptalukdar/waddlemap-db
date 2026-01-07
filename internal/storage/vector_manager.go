@@ -284,6 +284,46 @@ func (vm *VectorManager) GetBlock(collection, key string, index uint32) (*types.
 	return block, nil
 }
 
+// GetRelativeBlocks retrieves blocks from (centerIndex - before) to (centerIndex + after).
+func (vm *VectorManager) GetRelativeBlocks(collection, key string, centerIndex, before, after int) ([]types.BlockData, error) {
+	coll, err := vm.collections.GetCollection(collection)
+	if err != nil {
+		return nil, err
+	}
+
+	if exists := coll.ContainsKey(key); !exists {
+		return nil, fmt.Errorf("key %q not found", key)
+	}
+
+	storageKey := vm.makeStorageKey(collection, key)
+	rawBlocks, err := vm.Manager.GetRelativeBlocks(storageKey, centerIndex, before, after)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]types.BlockData, 0, len(rawBlocks))
+	for _, raw := range rawBlocks {
+		entry, err := DecodeEntry(raw)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode block: %v", err)
+		}
+
+		block := types.BlockData{
+			Primary:  string(entry.PrimaryData),
+			Keywords: entry.Keywords,
+		}
+
+		if len(entry.SecondaryData) == 8 {
+			vid, _ := BytesToVectorID(entry.SecondaryData)
+			if vec, ok := coll.GetVectorByID(vid); ok {
+				block.Vector = vec
+			}
+		}
+		result = append(result, block)
+	}
+	return result, nil
+}
+
 // GetVector retrieves just the vector for a block.
 func (vm *VectorManager) GetVector(collection, key string, index uint32) ([]float32, error) {
 	coll, err := vm.collections.GetCollection(collection)

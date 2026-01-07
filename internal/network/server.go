@@ -147,6 +147,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 		case *pb.WaddleRequest_BatchAppend:
 			ctx.Operation = types.OpBatchAppendBlock
 			ctx.Params = op.BatchAppend
+		case *pb.WaddleRequest_GetRelativeBlocks:
+			ctx.Operation = types.OpGetRelativeBlocks
+			ctx.Params = op.GetRelativeBlocks
 		default:
 			logger.Info("Unknown operation: %T", reqPb.Operation)
 			continue
