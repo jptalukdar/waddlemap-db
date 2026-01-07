@@ -93,6 +93,11 @@ class Collection:
         resp = self.client._send_request(req)
         return resp.block_list.blocks
 
+    def get_next_block(self, key, index):
+        return self.get_relative_blocks(key, index, before=0, after=1)
+
+    def get_previous_block(self, key, index):
+        return self.get_relative_blocks(key, index, before=1, after=0)
 
     def delete_key(self, key):
         """Delete a key and all its blocks from this collection."""
