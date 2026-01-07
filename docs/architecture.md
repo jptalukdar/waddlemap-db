@@ -1,121 +1,156 @@
-user gives a custom struct to the database. This struct is used for values in the database. 
-The same struct needs to be converted to protobuf struct for network communication by the client.
+# WaddleDB Architecture Documentation
 
-There is a core go module, that implements the database. It has socket which handles the connections and sends it to a transaction manager via channels.
-Transaction manager handles the transactions and sends it to the storage manager via channels.
-Storage manager handles the actual storage of the data.
+WaddleDB is an embedded, persistent vector database designed for managing structured documents with semantic search capabilities. It combines traditional key-value storage with vector similarity search, allowing users to store, retrieve, and search data at the block level within documents.
 
-The program runs a init module on the startup that checks if the database is initialized or not. If not, it creates a directory waddlemap_db to hold the data. It also creates a config file to store the configuration of the database.
+## 1. System Overview
 
-The init module initializes all modules and starts the server. It starts separate threads for all the managers. Each of them communicates via go channels. 
+The system is built as a modular Go application consisting of a core server and client libraries (Python, Go). The architecture emphasizes concurrency, data safety via WAL (Write-Ahead Logging), and efficient vector retrieval using HNSW (Hierarchical Navigable Small World) graphs.
 
-Every transaction is handled via a go-routine. 
+### Core Modules
 
-Create a python client that connects to the db via socket.
-It performs all the operations on the db.
+*   **Network Layer**: Handles incoming connections (Socket) and converts requests into internal transaction objects.
+*   **Transaction Manager**: Orchestrates operations, ensuring ACID properties (where applicable) and routing requests to the appropriate storage subsystems.
+*   **Storage Manager**: The foundational layer handling disk I/O, caching, and basic key-value operations.
+*   **Vector Manager**: An extension of the Storage Manager that handles vector embeddings, HNSW indices, and collection management.
 
+---
 
+## 2. Data Model
 
+WaddleDB uses a hierarchical data model designed for structured documents:
 
+### 2.1 Hierarchy
+1.  **Collection**: A logical grouping of Keys (e.g., "Articles", "Users"). Each collection has a defined vector dimension and distance metric (L2, Cosine, IP).
+2.  **Key**: Represents a single document (e.g., "doc_123"). A Key maps to an ordered array of **Blocks**.
+3.  **Block**: The fundamental unit of data.
+    *   **Index**: Position in the Key's array (0-indexed).
+    *   **Primary Data**: The actual content (Text, JSON, Blob).
+    *   **Secondary Data**: Vector embedding (float32 array) representing the primary data.
+    *   **Keywords**: List of tags or keywords for filtering.
 
-add operations for vector store
-
-// 1. check_key(key)
-// 2. get_value_by_index(key, index) // Returns primary data
-// 3. get_length(key) // Returns a tuple of (length_primary data , length secondary data)
-// 4. get_last_value(key) // Returns primary data
-// 5. add_value(key, value) // Add a block to the data.
-// 6. search_global(search_param) // Returns all the keys that match the search param
-// 7. search_on_key(key, value)
-// 8. snapshot()
-// 9. update_value(key, index, value)
-
-
-
-check_key -> check if key exists
-
-model each key as a document 
-The array is a series of chunks of data. One can add to it, and can remove from it. Removing won't delete the document. It will just remove the chunk from the array by making it a blank chunk. This causes fragmentation. 
-
-Add defragmentation function to remove the fragmentation caused by deleted data.
-
-get_value_by_index -> returns primary value
-get_vector_by_index -> returns secondary data in form of the vector embedddings. 
-get_length -> returns the length of the array identified by the keys.
-vector_search_key(top k: default array length) -> perform a vector search on the entire array for a single key
-vector_search_global(top k: int , return mode: key | block, filtered_keywords: list of keywords) -> perform a vector search on the entire database , returns the list of keys or blocks that match based on the return mode. If return mode is key, it returns the list of keys that match. If return mode is block, it returns the list of blocks that match.
-
-
-
-A giant clarification
-
-Collection -> A group of keys
-Key -> Array of blocks indexible by an integer
-Each block has a primary data and an optional secondary data (vector embeddings). 
-
-
-
-Operation on collection
-
-1. check if key exist on collection.
-
-
-Operation on a specific key: array
-1. check if index exist on array.
-2. get_value_by_index
-3. get_length -> get the length of the array.
-4. get_size -> in bytes calculate the size of the entire array.
-4. get_last_value -> get the last block of the array.
-5. add_value -> add a block to the array.
-6. remove_value -> make the block a zero vector. skip from any operation.
-7. update_value -> add then remove
-
-
-
-Collection
- └── Key ("doc_alpha")
+### 2.2 Conceptual View
+```text
+Collection ("Wiki")
+ └── Key ("page_alpha")
       ├── Block 0
-      |    ├── Index: 0
-      │    ├── Keywords: ["intro", "summary"]
-      │    ├── Primary: "Executive Summary..."
-      │    └── Secondary: [0.1, 0.5...] (Vector)
-      ├── Block 1
-      |    ├── Index: 1
-      │    ├── Keywords: ["finance", "q4"]
-      │    ├── Primary: "Q4 Revenue was..."
-      │    └── Secondary: [0.8, 0.2...] (Vector)
+      │    ├── Primary: "User gives a custom struct..."
+      │    ├── Secondary: [0.12, -0.5, ...] (Vector)
+      │    └── Keywords: ["intro", "struct"]
+      └── Block 1
+           ├── Primary: "The same struct needs to be..."
+           ├── Secondary: [0.8, 0.2, ...] (Vector)
+           └── Keywords: ["protobuf", "network"]
+```
 
+---
 
-GetBlock(collection string, key string, index int) -> BlockData | Retrieves the Primary Data for a specific block within a Key array.
+## 3. Storage Architecture
 
-GetVector(collection string, key string, index int) -> []float32 | Retrieves the Secondary Data (vector embeddings) for a specific block within a Key array.
+The storage layer is a hybrid system combing a persistent KV store and memory-mapped vector indices.
 
-GetKeyLength(collection string, key string) -> int | Retrieves the length of the array.
+### 3.1 Primary Storage (KV)
+*   Stores the raw block data (Primary, Vector, Keywords).
+*   Keys in the underlying KV store are composed as `Collection:Key`.
+*   Supports efficient append, get-by-index, and range retrieval.
 
-Search(collection string, query []float32, top_k int, mode string, keywords []string) -> ResultList | Performs a semantic search across all blocks in the collection filtered by keywords if any. Blank is global
+### 3.2 Vector Storage (HNSW)
+*   **Index Structure**: Uses a custom **Binary HNSW Format** (`HNSWV001`).
+*   **Persistence**:
+    *   Indices are saved to disk in a compact binary format containing a header, node table, vector data, and neighbor graphs.
+    *   **WAL (Write-Ahead Log)**: All write operations (Append, optional Delete) are logged to a `vector.wal` ensures crash recovery.
+    *   **Checkpoints**: Periodic checkpoints flush the in-memory HNSW graphs to disk (binary format) and truncate the WAL.
 
-SearchMoreLikeThis(collection string, key string, index int, top_k int) -> ResultList  | Performs a search using the vector at Key[Index] as the query.
+### 3.3 Batch & Concurrency
+*   **Batch Ingestion**: Supports specific `BatchAppendBlock` operations. These operations group WAL writes and storage commits to maximize throughput.
+*   **Durability**: For single writes, the HNSW index may be flushed immediately or on a trigger. For batch writes, flushing is deferred to a Checkpoint for performance, relying on WAL for durability.
 
-SearchInKey(collection string, key string, query []float32, top_k int) -> ResultList | Performs a vector search restricted to a single key's array.
+---
 
-DeleteKey(collection, key) | Removes a Key and all its blocks.
+## 4. API & Operations
 
-GetKey(collection, key) -> []BlockData | Retrieves all blocks of a specific Key.
+The system exposes a rich set of RPC-style operations.
 
-BatchSearch() -> Loop Search on multiple queries with same parameters.
+### 4.1 Basic Operations
+*   **`AppendBlock(collection, key, block)`**: Adds a block to the end of a key's array.
+*   **`BatchAppendBlock(collection, requests[])`**: Optimized high-throughput ingestion.
+*   **`GetBlock(collection, key, index)`**: Retrieves the full block (Primary + Vector).
+*   **`GetRelativeBlocks(collection, key, center_index, before, after)`**: Retrieves a window of blocks around a specific index. Useful for fetching context (e.g., in RAG applications).
+*   **`GetKeyLength(collection, key)`**: Returns the number of blocks in a document.
+*   **`DeleteKey(collection, key)`**: Removes a document and its vectors.
 
-KeywordSearch(collection, keywords, match_mode) -> []Key
+### 4.2 Vector Operations
+*   **`Search(collection, query, top_k, keywords)`**: Global semantic search across the entire collection. Supports filtering by keywords.
+*   **`SearchInKey(collection, key, query, top_k)`**: Scoped semantic search within a single document (Key).
+*   **`SearchMoreLikeThis(collection, key, index, top_k)`**: Uses the vector of an existing block as the query for a global search.
+*   **`GetVector(collection, key, index)`**: Retrieves only the vector embedding for analysis/re-ranking.
 
-CompactCollection(collection) | Defragment the collection. Also removes deleted blocks from the collection. Time consuming
+### 4.3 Management Operations
+*   **`CreateCollection(name, dims, metric)`**: Initialize a new vector space.
+*   **`Snapshot(collection)`**: Creates a point-in-time snapshot of the index.
+*   **`CompactCollection(collection)`**: Triggers defragmentation (implementation pending).
 
-AppendBlock(collection string, key string, data BlockData) | Appends a new block to the Key array.
+---
 
-ListKeys(collection string) -> []Key | Lists all keys in the collection.
+## 5. Client Protocol
 
-ContainsKey(collection string, key string) -> bool | Checks if a key exists in the collection.
+Communication is handled via a flexible Protobuf protocol defined in `waddle_protocol.proto`.
 
-Snapshot(collection string) -> SnapshotID
+*   **Request/Response**: All interactions use a unified `WaddleRequest` and `WaddleResponse` envelope.
+*   **OneOf Polymorphism**: Requests contain a `oneof` field acting as a union type for specific operation arguments (e.g., `AppendBlockRequest`, `SearchRequest`).
+*   **Clients**:
+    *   **Go Client**: Native usage via internal packages.
+    *   **Python Client**: Connects via Socket, exposing a pythonic API for data science and AI workflows.
 
-UpdateBlock(collection string, key string, index int, data BlockData) | Updates a specific block within a Key array. If the data doesn't exceed the present block size, run UpdateBlock. Otherwise, run ReplaceBlock. This will update the vector embeddings if present. 
+---
 
-ReplaceBlock(collection string, key string, index int, data BlockData) | Replaces a specific block within a Key array. Block will contain the previous index. This will delete the previous block and create a new one. This will also update the vector embeddings if present.
+## 6. Storage Layout
+
+The database manages data persistence through a structured directory layout and specialized binary formats.
+
+### 6.1 Directory Structure
+```text
+waddlemap_db/
+├── data/                  # Primary Key-Value Store
+│   └── ...                # KV Store files
+├── vector.wal             # Write-Ahead Log (Global)
+└── indexes/               # Vector Indices
+    └── <CollectionName>/  # Per-Collection Directory
+        ├── vectors.hnsw   # HNSW Vector Index (Binary)
+        ├── keywords.inv   # Inverted Keyword Index
+        ├── doc_map.bin    # Forward Index (VectorID -> Key Mapping)
+        └── meta.json      # Collection Metadata
+```
+
+### 6.2 File Formats
+
+#### HNSW Index (`vectors.hnsw`)
+A custom binary format optimized for memory mapping (mmap) and fast loading. It consists of four contiguous sections:
+
+1.  **Header (64 bytes)**:
+    *   Magic: `HNSWV001`
+    *   Metadata: Dimensions, Metric (L2/Cosine/IP), Node Count, Entry Point ID, Max Level.
+    *   Configuration: Max Connections (M).
+
+2.  **Node Table**:
+    An array of fixed-size records for every node in the graph.
+    *   `ID` (8 bytes)
+    *   `Level` (4 bytes)
+    *   `VectorOffset` (4 bytes): Pointer to vector data.
+    *   `NeighborOffset` (4 bytes): Pointer to neighbor list.
+    *   `NeighborCount` (4 bytes): Total count of neighbors across all levels.
+
+3.  **Vector Data**:
+    A contiguous block containing raw float32 vectors for all nodes.
+
+4.  **Neighbor Lists**:
+    Adjacency lists for the HNSW graph layers. Stored as:
+    *   `[LevelCount]` (2 bytes)
+    *   For each level:
+        *   `[NeighborCount]` (2 bytes)
+        *   `[NeighborID_1, NeighborID_2, ...]` (8 bytes each)
+
+#### Write-Ahead Log (`vector.wal`)
+Used for crash recovery, the WAL records all mutation events before they are applied to the in-memory index or flushed to disk.
+*   **Format**: Sequential GOB-encoded stream.
+*   **Entry Structure**: `{Timestamp, OpType, Collection, Key, VectorID, Vector, Keywords, PrimaryData}`.
+*   **Operations**: `Add`, `Delete`, `Update`.
