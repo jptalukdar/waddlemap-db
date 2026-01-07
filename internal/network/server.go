@@ -168,7 +168,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		}
 
 		if respCtx.Error != nil {
-			logger.Error("Op Error (ReqID: %s): %v", respCtx.ReqID, respCtx.Error)
+			logger.Error("Op (%s) Error (ReqID: %s): %v", ctx.Operation.String(), respCtx.ReqID, respCtx.Error)
 			respPb.ErrorMessage = respCtx.Error.Error()
 		}
 

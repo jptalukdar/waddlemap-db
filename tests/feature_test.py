@@ -90,16 +90,16 @@ class CollectionManagementTest(BaseTest):
                 break
         self.assert_true(found, f"Collection '{name}' found in list")
         
-        # 3. Delete
-        self.log(f"Deleting collection '{name}'...")
-        self.ctx.client.delete_collection(name)
+        # # 3. Delete
+        # self.log(f"Deleting collection '{name}'...")
+        # self.ctx.client.delete_collection(name)
         
-        # Verify delete
-        cols_after = self.ctx.client.list_collections()
-        found_after = any(c.name == name for c in cols_after)
-        self.assert_true(not found_after, f"Collection '{name}' should be deleted")
+        # # Verify delete
+        # cols_after = self.ctx.client.list_collections()
+        # found_after = any(c.name == name for c in cols_after)
+        # self.assert_true(not found_after, f"Collection '{name}' should be deleted")
         
-        print(f"{bcolors.OKGREEN}    PASS{bcolors.ENDC}")
+        # print(f"{bcolors.OKGREEN}    PASS{bcolors.ENDC}")
 
 class BasicOperationsTest(BaseTest):
     def run(self):

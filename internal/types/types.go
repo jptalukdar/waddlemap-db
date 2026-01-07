@@ -27,6 +27,55 @@ const (
 	OpGetRelativeBlocks
 )
 
+func (m ProtocolMethod) String() string {
+	switch m {
+	case OpCreateCollection:
+		return "OpCreateCollection"
+	case OpDeleteCollection:
+		return "OpDeleteCollection"
+	case OpListCollections:
+		return "OpListCollections"
+	case OpCompactCollection:
+		return "OpCompactCollection"
+	case OpAppendBlock:
+		return "OpAppendBlock"
+	case OpGetBlock:
+		return "OpGetBlock"
+	case OpGetVector:
+		return "OpGetVector"
+	case OpGetKeyLength:
+		return "OpGetKeyLength"
+	case OpGetKey:
+		return "OpGetKey"
+	case OpDeleteKey:
+		return "OpDeleteKey"
+	case OpListKeys:
+		return "OpListKeys"
+	case OpContainsKey:
+		return "OpContainsKey"
+	case OpUpdateBlock:
+		return "OpUpdateBlock"
+	case OpReplaceBlock:
+		return "OpReplaceBlock"
+	case OpSearch:
+		return "OpSearch"
+	case OpSearchMLT:
+		return "OpSearchMLT"
+	case OpSearchInKey:
+		return "OpSearchInKey"
+	case OpKeywordSearch:
+		return "OpKeywordSearch"
+	case OpSnapshotCollection:
+		return "OpSnapshotCollection"
+	case OpBatchAppendBlock:
+		return "OpBatchAppendBlock"
+	case OpGetRelativeBlocks:
+		return "OpGetRelativeBlocks"
+	default:
+		return "Unknown"
+	}
+}
+
 // DBSchemaConfig holds database configuration.
 type DBSchemaConfig struct {
 	PayloadSize int
